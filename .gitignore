@@ -172,3 +172,14 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# IDEs
+.vscode/
+.idea/
+
+# Data directories
+results/
+!results/LO_Warszawa_2025_Warszawa_SL.xlsx
+
+# repomix
+repomix-output*

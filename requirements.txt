@@ -1,0 +1,14 @@
+pandas
+requests
+beautifulsoup4
+googlemaps
+openpyxl
+pdfplumber
+pyyaml
+aiohttp
+matplotlib
+seaborn
+folium
+streamlit
+streamlit-folium
+numpy

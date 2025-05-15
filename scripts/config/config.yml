@@ -1,0 +1,19 @@
+# Parametry wejściowe
+adres_domowy: "Warszawa, Metro Wilanowska"   # Adres początkowy do obliczeń czasów dojazdu
+pobierz_nowe_czasy: true                     # Czy pobierać nowe czasy dojazdu z Google Maps API
+departure_hour: 7                            # Godzina wyjazdu
+departure_minute: 30                         # Minuta wyjazdu
+googlemaps_batch_size: 25
+licz_score: false                            # Czy liczyć score (algorytm rankingowy)
+
+# Parametry rankingowe
+P: 170               # prognozowana liczba punktów
+# wagi – możesz zmieniać bez grzebania w kodzie
+# wQ + wA + wC + wP = 1
+wQ: 0.2              # wQ - jakość szkoły wynikająca z rankingu
+wA: 0.1              # wA - prawdopodobieństwo przyjęcia na podstawie punktów
+wC: 0.2              # wC - czas dojazdu do szkoły
+wP: 0.5              # wP - dopasowanie profilu do przedmiotów rozszerzonych
+desired_subject: matematyka   # filtrowanie profili (None = wyłącz)
+rank_cutoff: 50               # TOP-N z rankingu Perspektyw
+margin_min: -15               # odrzuć klasy poniżej tego marginesu
