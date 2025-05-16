@@ -156,7 +156,7 @@ def polacz_dane(df_vulcan, df_punkty, df_rank):
     logger.info("Łączenie danych Vulcan z progami punktowymi...")
     df_merged = pd.merge(
         df_vulcan,
-        df_punkty[["NazwaSzkoly", "OddzialNazwa", "MinPunkty", "SzkolaIdentyfikator"]],
+        df_punkty[["NazwaSzkoly", "OddzialNazwa", "Prog_min_klasa", "SzkolaIdentyfikator"]],
         how="left",
         on=["SzkolaIdentyfikator", "OddzialNazwa"]
     )
@@ -333,10 +333,10 @@ def main():
     logger.info("Przygotowywanie danych do zapisu...")
     # Wylicz min/max punktów dla każdej szkoły na podstawie df_punkty
     minmax_punkty = (
-        df_punkty.groupby("SzkolaIdentyfikator")["MinPunkty"]
+        df_punkty.groupby("SzkolaIdentyfikator")["Prog_min_klasa"]
         .agg(["min", "max"])
         .reset_index()
-        .rename(columns={"min": "MinPunkty", "max": "MaxPunkty"})
+        .rename(columns={"min": "Prog_min_szkola", "max": "Prog_max_szkola"})
     )
 
     # Unikalne szkoły z Vulcan (dodaj IdSzkoly)
@@ -374,7 +374,7 @@ def main():
     # dodaj kolumny PunktyOd, PunktyDo z df_szkoly
     df_merged = pd.merge(
         df_merged,
-        df_szkoly[["SzkolaIdentyfikator", "MinPunkty", "MaxPunkty"]],
+        df_szkoly[["SzkolaIdentyfikator", "Prog_min_szkola", "Prog_max_szkola"]],
         how="left",
         on="SzkolaIdentyfikator",
         suffixes=("", "_szkola")

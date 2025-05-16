@@ -1,6 +1,8 @@
 # Projekt: Wybór liceum w Warszawie
 Skrypt do pobierania, łączenia danych o liceach w Warszawie na rok 2025 oraz generowania wizualizacji.
 
+Aplikacja jest dostępna na https://licea-warszawa-2025.streamlit.app/
+
 Ten projekt służy do pobrania informacji o liceach z systemu Vulcan,
 połączenia z danymi o progach punktowych z poprzednich lat,
 rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps
@@ -75,7 +77,7 @@ oraz generowania różnorodnych wizualizacji ułatwiających analizę.
         *   Opcjonalnie zmień `departure_hour` i `departure_minute` dla obliczeń czasu dojazdu.
         *   Ustaw `pobierz_nowe_czasy` na `True`, jeśli chcesz pobrać świeże dane o czasach dojazdu (domyślnie `True`).
         *   Ustaw `licz_score` na `True`, jeśli chcesz obliczyć złożony wskaźnik dla szkół.
-5.  Umieść wymagane pliki w folderze `data/` (bez zmian).
+5.  Umieść wymagane pliki w folderze `data/`.
 6.  Uruchom główny skrypt przetwarzający dane (z katalogu głównego projektu, np. `Licea/`):
     ```powershell
     python scripts/main.py
@@ -99,27 +101,23 @@ oraz generowania różnorodnych wizualizacji ułatwiających analizę.
 
 ## Główne funkcjonalności
 
-*   **Pobieranie danych z Vulcan:** Skrypt `main.py` (korzystając z `scripts/data_processing/get_data_vulcan_async.py`) automatycznie pobierze dane o szkołach z systemu Vulcan.
+*   **Pobieranie danych** Skrypt `main.py` (korzystając z `scripts/data_processing/get_data_vulcan_async.py`) automatycznie pobierze dane o szkołach z systemu Vulcan.
 *   **Parsowanie rankingu Perspektyw:** Ranking jest parsowany z PDF (przez `scripts/data_processing/parser_perspektywy.py`).
 *   **Wczytywanie progów punktowych:** Dane o progach wczytywane są przez `scripts/data_processing/load_minimum_points.py`.
 *   **Obliczanie czasów dojazdu i geokodowanie:**
     *   Skrypt `main.py` (korzystając z `scripts/api_clients/googlemaps_api.py`) oblicza czasy dojazdu z adresu domowego (z `scripts/config/config.yml`).
     *   Wykorzystuje **Google Maps API**.
-*   **Normalizacja i łączenie danych:** (bez zmian w opisie funkcjonalności)
-*   **Filtrowanie:** (bez zmian w opisie funkcjonalności)
+*   **Normalizacja i łączenie danych:** 
+*   **Filtrowanie:** 
 *   **Scoring:** Opcjonalnie obliczany jest wskaźnik przez `scripts/analysis/score.py`.
 *   **Generowanie wizualizacji:** Skrypt `scripts/visualization/generate_visuals.py` tworzy wykresy.
 *   **Generowanie interaktywnej mapy:** Skrypt `scripts/visualization/generate_map.py` tworzy mapę.
 *   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia aplikację webową.
-    *   (reszta opisu bez zmian)
 
 ## Uwagi
-
 *   **Konfiguracja:** Kluczowe parametry działania skryptów znajdują się w pliku `scripts/config/config.yml`.
-*   **Google Maps API** (bez zmian)
-*   **Pliki pośrednie:** (bez zmian)
+*   **Google Maps API** Wymagany klucz API w zmiennej `GOOGLE_MAPS_API_KEY`
 *   **Wymuszenie odświeżenia danych:** Zmodyfikuj flagę `pobierz_nowe_czasy` w `scripts/config/config.yml`.
-*   **Wymagania dla aplikacji Streamlit:** Do uruchomienia interaktywnej aplikacji wymagana jest instalacja pakietu `streamlit` oraz `streamlit-folium`. Są one uwzględnione w pliku `requirements.txt`.
 
 ## Wykorzystywane biblioteki
 

@@ -70,7 +70,7 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
     """Wyciąga listę przedmiotów rozszerzonych z kolumn DataFrame"""
     potential_subjects = [col for col in df.columns if col not in [
         'SzkolaIdentyfikator', 'OddzialIdentyfikator', 'OddzialNazwa', 'UrlGrupy',
-        'MinPunkty', 'MinPunkty_szkola', 'MaxPunkty', 'RankingPoz'
+        'Prog_min_klasa', 'Prog_min_szkola', 'Prog_max_szkola', 'RankingPoz'
     ]]
     subject_cols = []
     for col in potential_subjects:
@@ -113,16 +113,16 @@ def apply_filters_to_classes(
             report_warning_callback("Kolumna 'RankingPoz' nie znaleziona w danych do filtrowania rankingu.")
 
     if min_class_points is not None:
-        if "MinPunkty" in df_filtered.columns:
-            df_filtered = df_filtered[df_filtered["MinPunkty"] >= min_class_points]
+        if "Prog_min_szkola" in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["Prog_min_szkola"] >= min_class_points]
         else:
-            report_warning_callback("Kolumna 'MinPunkty' nie znaleziona w danych do filtrowania progu min.")
+            report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu min.")
     
     if max_class_points is not None:
-        if "MinPunkty" in df_filtered.columns: # Filtrujemy na podstawie progu minimalnego klasy
-            df_filtered = df_filtered[df_filtered["MinPunkty"] <= max_class_points]
+        if "Prog_min_szkola" in df_filtered.columns: # Filtrujemy na podstawie progu minimalnego klasy
+            df_filtered = df_filtered[df_filtered["Prog_min_szkola"] <= max_class_points]
         else:
-            report_warning_callback("Kolumna 'MinPunkty' nie znaleziona w danych do filtrowania progu max.")
+            report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu max.")
             
     return df_filtered
 
@@ -159,23 +159,23 @@ def aggregate_filtered_class_data(
                 details.append({
                     "nazwa": class_row.get("OddzialNazwa"),
                     "url": class_row.get("UrlGrupy"),
-                    "min_pkt_klasy": class_row.get("MinPunkty"),
+                    "min_pkt_klasy": class_row.get("Prog_min_klasa"),
                 })
             detailed_filtered_classes_info[szk_id] = details
 
         school_summary_from_filtered = {}
         # Ensure all expected columns for aggregation are present
-        required_agg_cols = ["SzkolaIdentyfikator", "MinPunkty_szkola", "MaxPunkty", "RankingPoz"]
+        required_agg_cols = ["SzkolaIdentyfikator", "Prog_min_szkola", "Prog_max_szkola", "RankingPoz"]
         if all(col in df_filtered_classes.columns for col in required_agg_cols):
             agg_dict = {
-                "MinPunkty_szkola": "min", # Min próg szkoły z pasujących klas
-                "MaxPunkty": "max",        # Max próg szkoły (faktycznie klasy) z pasujących klas
+                "Prog_min_szkola": "min", # Min próg szkoły z pasujących klas
+                "Prog_max_szkola": "max", # Max próg szkoły (faktycznie klasy) z pasujących klas
                 "RankingPoz": "first"      # Ranking szkoły (jest taki sam dla wszystkich jej klas)
             }
             # Drop rows where any of the aggregation keys might be NaN before grouping
             # to avoid issues with groupby if these columns are not fully populated
             # However, typically SzkolaIdentyfikator should always be present.
-            # For MinPunkty_szkola, MaxPunkty, RankingPoz, they might be NaN for some classes.
+            # For Prog_min_szkola, Prog_max_szkola, RankingPoz, they might be NaN for some classes.
             # The aggregation functions (min, max, first) handle NaNs appropriately by default.
             
             grouped_for_summary = df_filtered_classes.groupby("SzkolaIdentyfikator").agg(agg_dict)
@@ -219,20 +219,20 @@ def add_school_markers_to_map(
             popup_html += f"Ranking Perspektywy 2025: {display_ranking}<br>"
         
         # Progi punktowe z przefiltrowanych klas
-        min_prog_filtered = summary.get('MinPunkty_szkola')
-        max_prog_filtered = summary.get('MaxPunkty')
+        min_prog_filtered = summary.get('Prog_min_szkola')
+        max_prog_filtered = summary.get('Prog_max_szkola')
         
         if pd.notna(min_prog_filtered) and pd.notna(max_prog_filtered):
-            popup_html += f"Przedział pkt. szkoły (dla filtr. klas) 2024: {int(min_prog_filtered)}–{int(max_prog_filtered)}<br>"
+            popup_html += f"Przedział pkt. szkoły (dla filtr. klas) 2024: {(min_prog_filtered)}–{(max_prog_filtered)}<br>"
         else:
             # Jeśli brak danych z przefiltrowanych, użyj ogólnych progów szkoły
-            min_prog_general = row.get('MinPunkty')
-            max_prog_general = row.get('MaxPunkty')
+            min_prog_general = row.get('Prog_min_szkola')
+            max_prog_general = row.get('Prog_max_szkola')
             if pd.notna(min_prog_general) and pd.notna(max_prog_general):
                 if min_prog_general == max_prog_general: # np. gdy tylko jedna klasa lub wszystkie mają ten sam próg
-                    popup_html += f"Próg punktowy szkoły (ogólny) 2024: {int(min_prog_general)}<br>"
+                    popup_html += f"Próg punktowy szkoły (ogólny) 2024: {(min_prog_general)}<br>"
                 else:
-                    popup_html += f"Przedział pkt. szkoły (ogólny) 2024: {int(min_prog_general)}–{int(max_prog_general)}<br>"
+                    popup_html += f"Przedział pkt. szkoły (ogólny) 2024: {(min_prog_general)}–{(max_prog_general)}<br>"
 
         num_matching_classes = class_count_per_school.get(szk_id, 0)
         if num_matching_classes > 0:
@@ -258,6 +258,8 @@ def add_school_markers_to_map(
         
         if 'url' in row and pd.notna(row['url']):
             popup_html += f"<a href='{row['url']}' target='_blank'>Zobacz ofertę szkoły (ogólnie)</a>"
+
+        popup_html = f"<div style='font-size:14px; line-height:1.2;'>{popup_html}</div>"
 
         folium.Marker(
             location=[row["SzkolaLat"], row["SzkolaLon"]],

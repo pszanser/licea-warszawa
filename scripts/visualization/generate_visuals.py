@@ -259,7 +259,7 @@ def bubble_próg_vs_dojazd(df_szkoly_param):
         print("Brak kolumny CzasDojazdu – pomijam bubble-chart.")
         return
     df = df_szkoly_param.copy()
-    df = df[df["CzasDojazdu"].notna() & df["MinPunkty"].notna()]
+    df = df[df["CzasDojazdu"].notna() & df["Prog_min_szkola"].notna()]
     if df.empty:
         print("Bubble-chart: brak pełnych danych (próg + dojazd).")
         return
@@ -271,7 +271,7 @@ def bubble_próg_vs_dojazd(df_szkoly_param):
     c = df["Dzielnica"].map(dz_color)
 
     fig, ax = plt.subplots(figsize=(8, 6))
-    sc = ax.scatter(df["CzasDojazdu"], df["MinPunkty"],
+    sc = ax.scatter(df["CzasDojazdu"], df["Prog_min_szkola"],
                     s=size, c=c, alpha=.7, edgecolor="k", linewidth=0.5)
     ax.set_xlabel("Czas dojazdu [min]")
     ax.set_ylabel("Próg punktowy 2024")
