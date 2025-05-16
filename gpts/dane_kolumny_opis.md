@@ -23,7 +23,7 @@
 | `SzkolaIdentyfikator`   | tekst          | Identyfikator szkoły (do łączenia z innymi arkuszami)            |
 | `NazwaSzkoly`           | tekst          | Pełna nazwa                                                      |
 | `AdresSzkoly`           | tekst          | Adres (ulica, kod pocztowy)                                      |
-| `Dzielnica`             | tekst          | Dzielnica Warszawy, np. `Mokotów``Śródmieście`                   |
+| `Dzielnica`             | tekst          | Dzielnica Warszawy, np. `Mokotów`, `Śródmieście`                 |
 | `OddzialNazwa`          | tekst          | Pełna nazwa klasy z oznaczeniem typu (np. \[O], \[DW]) i języków |
 | `PrzedmiotyRozszerzone` | tekst          | Lista przedmiotów w zakresie rozszerzonym                        |
 | `JezykiObce`            | tekst          | Języki nauczane w klasie (np. `1: angielski 2: niemiecki`)       |
