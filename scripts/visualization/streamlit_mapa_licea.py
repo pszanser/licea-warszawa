@@ -199,8 +199,17 @@ def main():
         with col2:
             st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
         with col3:
-            # Średni próg punktowy dla pasujących klas
-            avg_points = df_filtered_classes["Prog_min_klasa"].mean() if "Prog_min_klasa" in df_filtered_classes.columns and not df_filtered_classes.empty else None
+            # Średni próg: najpierw Prog_min_klasa, jeśli puste – Prog_min_szkola
+            avg_points = None
+            if not df_filtered_classes.empty:
+                serie = df_filtered_classes.apply(
+                    lambda r: r["Prog_min_klasa"]
+                              if pd.notna(r["Prog_min_klasa"])
+                              else r["Prog_min_szkola"],
+                    axis=1
+                )
+                avg_points = serie.mean()
+
             if avg_points is not None:
                 st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
             else:
