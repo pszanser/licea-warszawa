@@ -108,8 +108,8 @@ def main():
         if use_min_points:
             min_class_points_filter = st.slider(
                 "Minimalny próg punktowy:",
-                min_value=df_classes_raw["MinPunkty"].min() if "MinPunkty" in df_classes_raw.columns and not df_classes_raw["MinPunkty"].empty else 100.0,
-                max_value=df_classes_raw["MinPunkty"].max() if "MinPunkty" in df_classes_raw.columns and not df_classes_raw["MinPunkty"].empty else 200.0,
+                min_value=df_classes_raw["Prog_min_klasa"].min() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 100.0,
+                max_value=df_classes_raw["Prog_min_klasa"].max() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 200.0,
                 value=140.0,
                 step=1.0
             )
@@ -119,8 +119,8 @@ def main():
         if use_max_points:
             max_class_points_filter = st.slider(
                 "Maksymalny próg punktowy:",
-                min_value=df_classes_raw["MinPunkty"].min() if "MinPunkty" in df_classes_raw.columns and not df_classes_raw["MinPunkty"].empty else 100.0,
-                max_value=df_classes_raw["MinPunkty"].max() if "MinPunkty" in df_classes_raw.columns and not df_classes_raw["MinPunkty"].empty else 200.0,
+                min_value=df_classes_raw["Prog_min_klasa"].min() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 100.0,
+                max_value=df_classes_raw["Prog_min_klasa"].max() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 200.0,
                 value=180.0,
                 step=1.0
             )
@@ -200,7 +200,7 @@ def main():
             st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
         with col3:
             # Średni próg punktowy dla pasujących klas
-            avg_points = df_filtered_classes["MinPunkty"].mean() if "MinPunkty" in df_filtered_classes.columns and not df_filtered_classes.empty else None
+            avg_points = df_filtered_classes["Prog_min_klasa"].mean() if "Prog_min_klasa" in df_filtered_classes.columns and not df_filtered_classes.empty else None
             if avg_points is not None:
                 st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
             else:
@@ -218,8 +218,8 @@ def main():
                 class_count = count_filtered_classes.get(szk_id, 0)
                 
                 min_threshold_from_filtered_classes = None
-                if szk_id in school_summary_from_filtered and 'MinPunkty_szkola' in school_summary_from_filtered[szk_id]:
-                     min_threshold_from_filtered_classes = school_summary_from_filtered[szk_id]['MinPunkty_szkola']
+                if szk_id in school_summary_from_filtered and 'Prog_min_szkola' in school_summary_from_filtered[szk_id]:
+                     min_threshold_from_filtered_classes = school_summary_from_filtered[szk_id]['Prog_min_szkola']
                 elif szk_id in detailed_filtered_classes_info: # Fallback if summary not fully populated
                     thresholds = [
                         class_info.get("min_pkt_klasy")

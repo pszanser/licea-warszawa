@@ -17,7 +17,7 @@ def add_metrics(df: pd.DataFrame, P: float, desired_subject: str | None = None) 
     max_rank     = max(df["RankingPoz"].dropna().max(), 1)
     max_commute  = max(df["CzasDojazdu"].dropna().max(), 1)
 
-    df["AdmitMargin"] = P - df["MinPunkty"].where(df["MinPunkty"].notna(), df["MinPunkty_szkola"])
+    df["AdmitMargin"] = P - df["Prog_min_klasa"].where(df["Prog_min_klasa"].notna(), df["Prog_min_szkola"])
     df["AdmitProb"]    = 1 / (1 + np.exp(-K_SIGMOID * df["AdmitMargin"]))
     df["Quality"] = (max_rank - df["RankingPoz"].fillna(max_rank) + 1) / max_rank
     df["CommuteScore"] = 1 - df["CzasDojazdu"].fillna(max_commute) / max_commute

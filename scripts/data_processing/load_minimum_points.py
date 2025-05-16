@@ -3,7 +3,7 @@ import pandas as pd
 def load_min_points(excel_path):
     df_punkty = pd.read_excel(excel_path, header=2)
     df_punkty = df_punkty.rename(columns={
-        "Minimalna": "MinPunkty",
+        "Minimalna": "Prog_min_klasa",
         "Nazwa szkoły": "NazwaSzkoly",
         "Nazwa krótka oddziału": "OddzialNazwa"
     })
