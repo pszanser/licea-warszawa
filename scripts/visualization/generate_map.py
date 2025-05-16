@@ -223,16 +223,16 @@ def add_school_markers_to_map(
         max_prog_filtered = summary.get('Prog_max_szkola')
         
         if pd.notna(min_prog_filtered) and pd.notna(max_prog_filtered):
-            popup_html += f"Przedział pkt. szkoły (dla filtr. klas) 2024: {int(min_prog_filtered)}–{int(max_prog_filtered)}<br>"
+            popup_html += f"Przedział pkt. szkoły (dla filtr. klas) 2024: {(min_prog_filtered)}–{(max_prog_filtered)}<br>"
         else:
             # Jeśli brak danych z przefiltrowanych, użyj ogólnych progów szkoły
             min_prog_general = row.get('Prog_min_szkola')
             max_prog_general = row.get('Prog_max_szkola')
             if pd.notna(min_prog_general) and pd.notna(max_prog_general):
                 if min_prog_general == max_prog_general: # np. gdy tylko jedna klasa lub wszystkie mają ten sam próg
-                    popup_html += f"Próg punktowy szkoły (ogólny) 2024: {int(min_prog_general)}<br>"
+                    popup_html += f"Próg punktowy szkoły (ogólny) 2024: {(min_prog_general)}<br>"
                 else:
-                    popup_html += f"Przedział pkt. szkoły (ogólny) 2024: {int(min_prog_general)}–{int(max_prog_general)}<br>"
+                    popup_html += f"Przedział pkt. szkoły (ogólny) 2024: {(min_prog_general)}–{(max_prog_general)}<br>"
 
         num_matching_classes = class_count_per_school.get(szk_id, 0)
         if num_matching_classes > 0:
