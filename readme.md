@@ -1,12 +1,15 @@
 # Projekt: Wybór liceum w Warszawie
-Skrypt do pobierania, łączenia danych o liceach w Warszawie na rok 2025 oraz generowania wizualizacji.
-
-Aplikacja jest dostępna na https://licea-warszawa-2025.streamlit.app/
-
 Ten projekt służy do pobrania informacji o liceach z systemu Vulcan,
 połączenia z danymi o progach punktowych z poprzednich lat,
 rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps
 oraz generowania różnorodnych wizualizacji ułatwiających analizę.
+
+Interaktywna mapa jest dostępna na https://licea-warszawa-2025.streamlit.app/
+
+Posty o procesie tworzenia
+[1](https://www.linkedin.com/posts/pszanser_sgh-liceum-edukacja-activity-7323984277598040065-8DO0)
+[2](https://www.linkedin.com/posts/pszanser_asystent-ai-do-wyboru-liceum-w-warszawie-activity-7328660490576990209-5mo8)
+[3](https://www.linkedin.com/posts/pszanser_liceum-edukacja-warszawa-activity-7328808246729658368-sw5m)
 
 ## Struktura katalogów
 
