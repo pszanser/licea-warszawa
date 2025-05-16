@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import folium
-from streamlit_folium import folium_static
+from streamlit_folium import st_folium
 import numbers
 
 # Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
@@ -208,7 +208,7 @@ def main():
 
 
     st.subheader("Mapa szkół")
-    folium_static(map_object, width=None, height=600)
+    st_folium(map_object, width=None, height=600, returned_objects=[])
     
     if not df_schools_to_display.empty:
         with st.expander("Pokaż listę pasujących szkół", expanded=False):
@@ -248,6 +248,12 @@ def main():
                 schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].apply(
                     lambda x: int(x) if pd.notna(x) and isinstance(x, numbers.Number) and x == x // 1 else (f"{x:.1f}" if pd.notna(x) and isinstance(x, numbers.Number) else (x if isinstance(x, str) else "-"))
                 )
+            
+            # Konwersja całej kolumny do stringów przed wyświetleniem, aby uniknąć ArrowTypeError w Streamlit.io
+            if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
+                schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].astype(str)
+            if "Ranking" in schools_summary_df.columns:
+                schools_summary_df["Ranking"] = schools_summary_df["Ranking"].astype(str)
 
             st.dataframe(schools_summary_df, use_container_width=True)
 
