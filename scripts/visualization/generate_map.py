@@ -259,6 +259,8 @@ def add_school_markers_to_map(
         if 'url' in row and pd.notna(row['url']):
             popup_html += f"<a href='{row['url']}' target='_blank'>Zobacz ofertę szkoły (ogólnie)</a>"
 
+        popup_html = f"<div style='font-size:14px; line-height:1.2;'>{popup_html}</div>"
+
         folium.Marker(
             location=[row["SzkolaLat"], row["SzkolaLon"]],
             tooltip=tooltip_text,
