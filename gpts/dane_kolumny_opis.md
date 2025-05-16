@@ -3,14 +3,14 @@
 | Kolumna               | Typ            | Opis                                                                |
 | --------------------- | -------------- | ------------------------------------------------------------------- |
 | `SzkolaIdentyfikator` | tekst          | Unikalny identyfikator szkoły, używany do powiązań między arkuszami |
-| `NazwaSzkoly`         | tekst          | Pełna nazwa liceum                                                  |
+| `NazwaSzkoly`         | tekst          | Pełna nazwa                                                         |
 | `AdresSzkoly`         | tekst          | Adres (ulica, kod pocztowy)                                         |
-| `TypSzkoly`           | tekst          | Typ szkoły = `liceum`                                            |
+| `TypSzkoly`           | tekst          | Typ szkoły = `liceum`                                               |
 | `Dzielnica`           | tekst          | Dzielnica Warszawy, np. `Mokotów`, `Śródmieście`                    |
 | `RankingPoz`          | liczba (int)   | Miejsce szkoły w rankingu Perspektyw 2025 (1 = najlepsza)           |
-| `MinPunkty`           | liczba (float) | Najniższa liczba punktów, z jaką kandydat został przyjęty w 2024    |
-| `MaxPunkty`           | liczba (float) | Najwyższa liczba punktów przyjętego ucznia w 2024                   |
-| `CzasDojazdu`         | liczba (int)   | Szacowany czas dojazdu w minutach z Metra Wilanowska                |
+| `MinPunkty`           | liczba (float) | Min liczba punktów do szkoły (dolny przedział)                      |
+| `MaxPunkty`           | liczba (float) | Min liczba punktów do szkoły (górny przedział)                      |
+| `CzasDojazdu`         | liczba (int)   | Szacowany czas dojazdu w minutach                                   |
 | `SzkolaLat`           | liczba (float) | Szerokość geograficzna szkoły (np. 52.2297)                         |
 | `SzkolaLon`           | liczba (float) | Długość geograficzna szkoły (np. 21.0122)                           |
 | `url`                 | tekst (URL)    | Link do oferty szkoły w systemie rekrutacyjnym edu.com.pl           |
@@ -29,11 +29,11 @@
 | `JezykiObce`            | tekst          | Języki nauczane w klasie (np. `1: angielski 2: niemiecki`)       |
 | `Profil`                | tekst          | Skrócona forma profilu klasy (np. `mat-fiz`, `bio-chem`)         |
 | `RankingPoz`            | liczba (int)   | Pozycja szkoły w rankingu Perspektyw 2025                        |
-| `MinPunkty`             | liczba (float) | Minimalna liczba punktów przyjęcia do tej konkretnej klasy w 2024|
-| `MinPunkty_szkola`      | liczba (float) | Min liczba punktów do szkołu (dolny przedział)                   |
-| `MaxPunkty`             | liczba (float) | Min liczba punktów do szkołu (górny przedział)                   |
+| `MinPunkty`             | liczba (float) | Minimalna liczba punktów do tej klasy w 2024                     |
+| `MinPunkty_szkola`      | liczba (float) | Min liczba punktów do szkoły (dolny przedział)                   |
+| `MaxPunkty`             | liczba (float) | Min liczba punktów do szkoły (górny przedział)                   |
 | `CzasDojazdu`           | liczba (int)   | Czas dojazdu do szkoły z Metra Wilanowska                        |
-| `SzkolaLat`             | liczba (float) | Szerokość geograficzna szkoły                                     |
+| `SzkolaLat`             | liczba (float) | Szerokość geograficzna szkoły                                    |
 | `SzkolaLon`             | liczba (float) | Długość geograficzna szkoły                                      |
 | `Kod`                   | tekst          | Kod pocztowy szkoły                                              |
 | `LiczbaMiejsc`          | liczba (int)   | Liczba miejsc rekrutacyjnych w klasie                            |
