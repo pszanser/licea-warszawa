@@ -113,16 +113,16 @@ def apply_filters_to_classes(
             report_warning_callback("Kolumna 'RankingPoz' nie znaleziona w danych do filtrowania rankingu.")
 
     if min_class_points is not None:
-        if "Prog_min_klasa" in df_filtered.columns:
-            df_filtered = df_filtered[df_filtered["Prog_min_klasa"] >= min_class_points]
+        if "Prog_min_szkola" in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["Prog_min_szkola"] >= min_class_points]
         else:
-            report_warning_callback("Kolumna 'Prog_min_klasa' nie znaleziona w danych do filtrowania progu min.")
+            report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu min.")
     
     if max_class_points is not None:
-        if "Prog_min_klasa" in df_filtered.columns: # Filtrujemy na podstawie progu minimalnego klasy
-            df_filtered = df_filtered[df_filtered["Prog_min_klasa"] <= max_class_points]
+        if "Prog_min_szkola" in df_filtered.columns: # Filtrujemy na podstawie progu minimalnego klasy
+            df_filtered = df_filtered[df_filtered["Prog_min_szkola"] <= max_class_points]
         else:
-            report_warning_callback("Kolumna 'Prog_min_klasa' nie znaleziona w danych do filtrowania progu max.")
+            report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu max.")
             
     return df_filtered
 

@@ -102,28 +102,28 @@ def main():
             default=[]
         )
         
-        st.subheader("Progi punktowe klasy")
-        use_min_points = st.checkbox("Użyj minimalnego progu", value=False)
-        min_class_points_filter = None
-        if use_min_points:
-            min_class_points_filter = st.slider(
-                "Minimalny próg punktowy:",
-                min_value=df_classes_raw["Prog_min_klasa"].min() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 100.0,
-                max_value=df_classes_raw["Prog_min_klasa"].max() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 200.0,
-                value=140.0,
+        st.subheader("Progi punktowe szkoły")
+        # checkbox, domyślnie False – filtr wyłączony
+        use_points_filter = st.checkbox("Filtruj według progów punktowych", value=False)
+        if use_points_filter:
+            min_pts = df_classes_raw["Prog_min_szkola"].min() \
+                if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 100.0
+            max_pts_raw = df_classes_raw["Prog_min_szkola"].max() \
+                if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 200.0
+            default_max = min(max_pts_raw, 300.0)
+
+            points_range = st.slider(
+                "Zakres progów minimalnych:",
+                min_value=min_pts,
+                max_value=300.0,
+                value=(min_pts, default_max),
                 step=1.0
             )
-        
-        use_max_points = st.checkbox("Użyj maksymalnego progu", value=False)
-        max_class_points_filter = None
-        if use_max_points:
-            max_class_points_filter = st.slider(
-                "Maksymalny próg punktowy:",
-                min_value=df_classes_raw["Prog_min_klasa"].min() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 100.0,
-                max_value=df_classes_raw["Prog_min_klasa"].max() if "Prog_min_klasa" in df_classes_raw.columns and not df_classes_raw["Prog_min_klasa"].empty else 200.0,
-                value=180.0,
-                step=1.0
-            )
+            min_class_points_filter, max_class_points_filter = points_range
+        else:
+            # filtr nieaktywny – nie przekazujemy ograniczeń
+            min_class_points_filter, max_class_points_filter = None, None
+
         st.markdown("---")
 
     df_filtered_classes = apply_filters_to_classes(
