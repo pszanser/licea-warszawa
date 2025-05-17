@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import folium
+from folium.plugins import HeatMap, Fullscreen, LocateControl
 from streamlit_folium import st_folium
 import numbers
 
@@ -38,17 +39,31 @@ def create_schools_map_streamlit(
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
 
+    # Brak wyboru podkładu mapy – korzystamy z domyślnego
+
+    Fullscreen().add_to(m)
+    LocateControl().add_to(m)
+
+    heatmap_fg = folium.FeatureGroup(name="Heatmapa")
+
     if df_schools_to_display.empty:
         st.warning("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.")
-        # Return empty map
     else:
         add_school_markers_to_map(
             folium_map_object=m,
             df_schools_to_display=df_schools_to_display,
             class_count_per_school=class_count_per_school,
             filtered_class_details_per_school=filtered_class_details_per_school,
-            school_summary_from_filtered=school_summary_from_filtered
+            school_summary_from_filtered=school_summary_from_filtered,
         )
+
+        heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
+        if heat_data:
+            HeatMap(heat_data).add_to(heatmap_fg)
+
+    heatmap_fg.add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
+
     return m
 
 def main():

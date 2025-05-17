@@ -1,5 +1,6 @@
 import folium
 from folium.plugins import MarkerCluster
+from folium.plugins import HeatMap, Fullscreen, LocateControl
 import os
 from pathlib import Path
 import pandas as pd
@@ -190,7 +191,7 @@ def aggregate_filtered_class_data(
     return df_schools_to_display, count_filtered_classes, detailed_filtered_classes_info, school_summary_from_filtered
 
 def add_school_markers_to_map(
-    folium_map_object: folium.Map,
+    folium_map_object: folium.Map | folium.FeatureGroup,
     df_schools_to_display: pd.DataFrame,
     class_count_per_school: dict[str, int],
     filtered_class_details_per_school: dict[str, list[dict]],
@@ -289,6 +290,11 @@ def create_schools_map(
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
 
+    # Używamy jednego domyślnego podkładu mapy – bez możliwości przełączania
+
+    Fullscreen().add_to(m)
+    LocateControl().add_to(m)
+
     if filters_info_html:
         legend_html = f'''
         <div style="position: fixed; top: 60px; left: 60px; width: 320px; z-index:9999; background-color: white; border:2px solid grey; border-radius:8px; padding: 10px; font-size: 14px; box-shadow: 2px 2px 8px #888;">
@@ -299,17 +305,25 @@ def create_schools_map(
         from folium import Element
         m.get_root().html.add_child(Element(legend_html))
 
+    heatmap_fg = folium.FeatureGroup(name="Heatmapa")
+
     if df_schools_to_display.empty:
         print("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.")
-        # Save empty map anyway
     else:
-         add_school_markers_to_map(
+        add_school_markers_to_map(
             m,
             df_schools_to_display,
             class_count_per_school,
             filtered_class_details_per_school,
-            school_summary_from_filtered
+            school_summary_from_filtered,
         )
+
+        heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
+        if heat_data:
+            HeatMap(heat_data).add_to(heatmap_fg)
+
+    heatmap_fg.add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
     try:
         m.save(str(output_path))
         print(f"✔ Mapa zapisana jako: {output_path}")
