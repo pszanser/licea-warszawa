@@ -31,10 +31,11 @@ def get_next_weekday_time(hour=7, minute=30):
     if weekday >= 5:
         days_ahead = 7 - weekday  # do poniedziałku
     else:
-        # Jeśli dziś już po 8:00, to następny dzień powszedni
+        # Jeśli dziś już po danej godzinie, to następny dzień powszedni
         now = datetime.datetime.now()
         if now.hour >= hour:
-            days_ahead = 1
+            # Jeżeli jest piątek, przeskocz weekend
+            days_ahead = 3 if weekday == 4 else 1
         else:
             days_ahead = 0
     next_weekday = today + datetime.timedelta(days=days_ahead)
