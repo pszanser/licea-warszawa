@@ -14,6 +14,7 @@ import folium
 from folium.plugins import Fullscreen, LocateControl
 from streamlit_folium import st_folium
 import numbers
+import io
 
 # Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
 scripts_dir = Path(__file__).resolve().parent.parent
@@ -218,6 +219,16 @@ def main():
             else:
                 st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
+    if not df_filtered_classes.empty:
+        buf = io.BytesIO()
+        df_filtered_classes.to_excel(buf, index=False, sheet_name="klasy")
+        buf.seek(0)
+        st.download_button(
+            label="📥 Pobierz dane klas (Excel)",
+            data=buf,
+            file_name="moje_klasy.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
     st.subheader("Mapa szkół")
     st_folium(map_object, width=None, height=600, returned_objects=[])
