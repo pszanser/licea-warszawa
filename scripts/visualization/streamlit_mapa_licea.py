@@ -134,7 +134,7 @@ def main():
 
         st.markdown("---")
 
-        show_heatmap = st.checkbox("Pokaż heatmapę szkół", value=False)
+        show_heatmap = st.checkbox("Pokaż mapę cieplną szkół", value=False)
 
     df_filtered_classes = apply_filters_to_classes(
         df_classes_raw,
