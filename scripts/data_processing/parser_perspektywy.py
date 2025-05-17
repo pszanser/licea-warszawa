@@ -79,6 +79,7 @@ def parse_ranking_perspektywy_pdf(pdf_file_path):
                     data_rows.append([poz, nazwa, dzielnica])
 
     df = pd.DataFrame(data_rows, columns=["RankingPoz", "NazwaSzkoly", "Dzielnica"])
+    df["RankingPoz"] = pd.to_numeric(df["RankingPoz"], errors="coerce")
     return df
 
 
