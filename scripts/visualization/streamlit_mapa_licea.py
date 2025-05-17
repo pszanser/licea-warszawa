@@ -14,6 +14,7 @@ import folium
 from folium.plugins import Fullscreen, LocateControl
 from streamlit_folium import st_folium
 import numbers
+import io
 
 # Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
 scripts_dir = Path(__file__).resolve().parent.parent
@@ -157,20 +158,21 @@ def main():
     detailed_filtered_classes_info, school_summary_from_filtered = \
         aggregate_filtered_class_data(df_filtered_classes, df_schools_raw, any_filters_active)
     
-    filters_info_html = ""
-    active_filters_list = []
+    filter_entries = []
     if wanted_subjects_filter:
-        active_filters_list.append(f"<b>Rozszerzenia - poszukiwane:</b> {', '.join(wanted_subjects_filter)}")
+        filter_entries.append(("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter)))
     if avoided_subjects_filter:
-        active_filters_list.append(f"<b>Rozszerzenia - unikane:</b> {', '.join(avoided_subjects_filter)}")
+        filter_entries.append(("Rozszerzenia - unikane", ", ".join(avoided_subjects_filter)))
     if max_ranking_poz_filter is not None:
-        active_filters_list.append(f"<b>Ranking TOP:</b> {max_ranking_poz_filter}")
+        filter_entries.append(("Ranking TOP", max_ranking_poz_filter))
     if min_class_points_filter is not None:
-        active_filters_list.append(f"<b>Minimalny próg punktowy klasy:</b> {min_class_points_filter}")
+        filter_entries.append(("Minimalny próg punktowy klasy", min_class_points_filter))
     if max_class_points_filter is not None:
-        active_filters_list.append(f"<b>Maksymalny próg punktowy klasy:</b> {max_class_points_filter}")
+        filter_entries.append(("Maksymalny próg punktowy klasy", max_class_points_filter))
 
-    if active_filters_list:
+    filters_info_html = ""
+    if filter_entries:
+        active_filters_list = [f"<b>{label}:</b> {value}" for label, value in filter_entries]
         filters_info_html = "<br>".join(active_filters_list)
         st.markdown(
             f"""
@@ -218,9 +220,23 @@ def main():
             else:
                 st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
-
     st.subheader("Mapa szkół")
     st_folium(map_object, width=None, height=600, returned_objects=[])
+
+    if not df_filtered_classes.empty:
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
+            if filter_entries:
+                filters_df = pd.DataFrame(filter_entries, columns=["Filtr", "Wartość"])
+                filters_df.to_excel(writer, index=False, sheet_name="Parametry")
+        buf.seek(0)
+        st.download_button(
+            label="📥 Pobierz dane klas (Excel)",
+            data=buf,
+            file_name="moje_klasy.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
     
     if not df_schools_to_display.empty:
         with st.expander("Pokaż listę pasujących szkół", expanded=False):
