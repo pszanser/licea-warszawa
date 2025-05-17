@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import folium
-from folium.plugins import Fullscreen, LocateControl
+from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
 import numbers
 
@@ -32,7 +32,8 @@ def create_schools_map_streamlit(
     df_schools_to_display: pd.DataFrame,
     class_count_per_school: dict,
     filtered_class_details_per_school: dict,
-    school_summary_from_filtered: dict
+    school_summary_from_filtered: dict,
+    show_heatmap: bool = False
 ):
     """
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
@@ -52,6 +53,10 @@ def create_schools_map_streamlit(
             filtered_class_details_per_school=filtered_class_details_per_school,
             school_summary_from_filtered=school_summary_from_filtered
         )
+
+    if show_heatmap and not df_schools_to_display.empty:
+        heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
+        HeatMap(heat_data, name="HeatMap").add_to(m)
     return m
 
 def main():
@@ -129,6 +134,8 @@ def main():
 
         st.markdown("---")
 
+        show_heatmap = st.checkbox("Pokaż heatmapę szkół", value=False)
+
     df_filtered_classes = apply_filters_to_classes(
         df_classes_raw,
         wanted_subjects=wanted_subjects_filter,
@@ -186,7 +193,8 @@ def main():
         df_schools_to_display=df_schools_to_display,
         class_count_per_school=count_filtered_classes,
         filtered_class_details_per_school=detailed_filtered_classes_info,
-        school_summary_from_filtered=school_summary_from_filtered
+        school_summary_from_filtered=school_summary_from_filtered,
+        show_heatmap=show_heatmap
     )
 
     if not df_schools_to_display.empty:
