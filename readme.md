@@ -20,6 +20,7 @@ Posty o procesie tworzenia
 │   ├── ranking-licea-warszawskie-2025.pdf
 │   └── waw_kod_dzielnica.csv
 ├── gpts/                 # Pliki związane z GPTs 
+│   └── `dane_kolumny_opis.md`  # Opis arkuszy i kolumn w pliku wynikowych Excel 
 ├── results/              # Katalog na pliki wynikowe 
 ├── scripts/              # Katalog ze skryptami Python
 │   ├── __init__.py
@@ -49,7 +50,6 @@ Posty o procesie tworzenia
 │       ├── generate_visuals.py
 │       └── streamlit_mapa_licea.py
 ├── requirements.txt      # Lista zależności Python
-├── DISCLAIMER.md         # Zastrzeżenia
 └── README.md             # Ten plik
 ```
 
@@ -119,7 +119,21 @@ Posty o procesie tworzenia
 
 ## Uwagi
 *   **Konfiguracja:** Kluczowe parametry działania skryptów znajdują się w pliku `scripts/config/config.yml`.
-*   **Google Maps API** Wymagany klucz API w zmiennej `GOOGLE_MAPS_API_KEY`
+*   **Google Maps API**: Wymagany klucz API w zmiennej środowiskowej `GOOGLE_MAPS_API_KEY`. 
+    * **Zalecane:** Aby ustawić zmienną na stałe w systemie Windows (PowerShell lub CMD):
+      ```powershell
+      setx GOOGLE_MAPS_API_KEY twój_klucz_api
+      ```
+      Po ustawieniu otwórz nowe okno terminala, aby zmienna była widoczna.
+    * Tymczasowo (tylko na czas bieżącej sesji):
+      ```powershell
+      set GOOGLE_MAPS_API_KEY=twój_klucz_api
+      ```
+    * W systemie Linux/MacOS (bash):
+      ```bash
+      export GOOGLE_MAPS_API_KEY=twój_klucz_api
+      ```
+    * **Uwaga:** Bez ustawionej zmiennej `GOOGLE_MAPS_API_KEY` czasy dojazdu nie zostaną obliczone i odpowiednie kolumny w plikach wynikowych pozostaną puste.
 *   **Wymuszenie odświeżenia danych:** Zmodyfikuj flagę `pobierz_nowe_czasy` w `scripts/config/config.yml`.
 
 ## Wykorzystywane biblioteki
