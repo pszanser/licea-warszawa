@@ -115,6 +115,7 @@ Posty o procesie tworzenia
 *   **Scoring:** Opcjonalnie obliczany jest wskaźnik przez `scripts/analysis/score.py`.
 *   **Generowanie wizualizacji:** Skrypt `scripts/visualization/generate_visuals.py` tworzy wykresy.
 *   **Generowanie interaktywnej mapy:** Skrypt `scripts/visualization/generate_map.py` tworzy mapę.
+*   **Grupowanie znaczników na mapie:** Dzięki `folium.plugins.MarkerCluster` ikony szkół łączą się w klastry, co poprawia czytelność przy dużym powiększeniu.
 *   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia aplikację webową.
 
 ## Uwagi

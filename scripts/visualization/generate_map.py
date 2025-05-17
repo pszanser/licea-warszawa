@@ -1,4 +1,5 @@
 import folium
+from folium.plugins import MarkerCluster
 import os
 from pathlib import Path
 import pandas as pd
@@ -197,10 +198,14 @@ def add_school_markers_to_map(
 ) -> None:
     """
     Dodaje markery szkół do obiektu mapy Folium.
+    Markery są grupowane w klastry (MarkerCluster) dla lepszej czytelności.
     """
     if df_schools_to_display.empty:
         # print("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.") # Handled by caller
         return
+
+    cluster = MarkerCluster()
+    cluster.add_to(folium_map_object)
 
     for _, row in df_schools_to_display.iterrows():
         tooltip_text = f"{row['NazwaSzkoly']} ({row['Dzielnica']})"
@@ -266,7 +271,7 @@ def add_school_markers_to_map(
             tooltip=tooltip_text,
             popup=folium.Popup(popup_html, max_width=350),
             icon=folium.Icon(color="blue", icon="graduation-cap", prefix="fa")
-        ).add_to(folium_map_object)
+        ).add_to(cluster)
 
 
 def create_schools_map(
@@ -279,6 +284,8 @@ def create_schools_map(
 ) -> None:
     """
     Tworzy mapę Folium z lokalizacjami szkół i zapisuje ją do pliku HTML.
+    Na mapie zastosowano klastrowanie znaczników, dzięki czemu
+    wiele bliskich szkół nie nachodzi na siebie przy oddaleniu.
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
 
