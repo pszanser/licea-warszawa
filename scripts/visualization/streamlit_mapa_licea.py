@@ -226,7 +226,7 @@ def main():
     if not df_filtered_classes.empty:
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df_filtered_classes.to_excel(writer, index=False, sheet_name="klasy")
+            df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
             if filter_entries:
                 filters_df = pd.DataFrame(filter_entries, columns=["Filtr", "Wartość"])
                 filters_df.to_excel(writer, index=False, sheet_name="Parametry")
