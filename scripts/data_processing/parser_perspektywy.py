@@ -34,6 +34,7 @@ def parse_ranking_perspektywy_html(html_file_path):
         data.append([poz, nazwa, dzielnica, hist24, wsk])
 
     df = pd.DataFrame(data, columns=["RankingPoz", "NazwaSzkoly", "Dzielnica", "Historia24", "WSK"])
+    df["RankingPoz"] = pd.to_numeric(df["RankingPoz"], errors="coerce")
     return df
 
 
@@ -79,16 +80,17 @@ def parse_ranking_perspektywy_pdf(pdf_file_path):
                     data_rows.append([poz, nazwa, dzielnica])
 
     df = pd.DataFrame(data_rows, columns=["RankingPoz", "NazwaSzkoly", "Dzielnica"])
+    df["RankingPoz"] = pd.to_numeric(df["RankingPoz"], errors="coerce")
     return df
 
 
 def main():
-    # Przykład: odczyt z HTML
-    df_html = parse_ranking_perspektywy_pdf("data/ranking-licea-warszawskie-2025.pdf")
-    print(df_html.head())
+    # Przykład: odczyt z PDF
+    df_pdf = parse_ranking_perspektywy_pdf("data/ranking-licea-warszawskie-2025.pdf")
+    print(df_pdf.head())
 
     # Zapis
-    df_html.to_excel("results/ranking_perspektywy.xlsx", index=False)
+    df_pdf.to_excel("results/ranking_perspektywy.xlsx", index=False)
 
 if __name__ == "__main__":
     main()
