@@ -219,6 +219,9 @@ def main():
             else:
                 st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
+    st.subheader("Mapa szkół")
+    st_folium(map_object, width=None, height=600, returned_objects=[])
+
     if not df_filtered_classes.empty:
         buf = io.BytesIO()
         df_filtered_classes.to_excel(buf, index=False, sheet_name="klasy")
@@ -229,9 +232,6 @@ def main():
             file_name="moje_klasy.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
-    st.subheader("Mapa szkół")
-    st_folium(map_object, width=None, height=600, returned_objects=[])
     
     if not df_schools_to_display.empty:
         with st.expander("Pokaż listę pasujących szkół", expanded=False):
