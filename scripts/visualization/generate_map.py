@@ -1,5 +1,5 @@
 import folium
-from folium.plugins import MarkerCluster, Fullscreen, LocateControl
+from folium.plugins import MarkerCluster, Fullscreen, LocateControl, HeatMap
 import os
 from pathlib import Path
 import pandas as pd
@@ -274,13 +274,38 @@ def add_school_markers_to_map(
         ).add_to(cluster)
 
 
+def _add_heatmap_toggle(map_obj: folium.Map, heat_layer: HeatMap) -> None:
+    """Dodaje prosty przycisk do włączania i wyłączania warstwy HeatMap."""
+    button_html = f"""
+    <div id='heatmap-btn' style='position: fixed; top: 10px; right: 10px; z-index:9999;'>
+        <button onclick="toggleHeatmap()" style='padding:4px 8px;'>Pokaż heatmapę</button>
+    </div>
+    <script>
+    function toggleHeatmap() {{
+        var map = {map_obj.get_name()};
+        var layer = {heat_layer.get_name()};
+        var btn = document.getElementById('heatmap-btn').children[0];
+        if (map.hasLayer(layer)) {{
+            map.removeLayer(layer);
+            btn.innerHTML = 'Pokaż heatmapę';
+        }} else {{
+            map.addLayer(layer);
+            btn.innerHTML = 'Ukryj heatmapę';
+        }}
+    }}
+    </script>
+    """
+    from folium import Element
+    map_obj.get_root().html.add_child(Element(button_html))
+
 def create_schools_map(
     df_schools_to_display: pd.DataFrame,
     output_path: Path,
     class_count_per_school: dict[str, int],
     filtered_class_details_per_school: dict[str, list[dict]],
     school_summary_from_filtered: dict[str, dict],
-    filters_info_html: str = ""
+    filters_info_html: str = "",
+    show_heatmap: bool = False
 ) -> None:
     """
     Tworzy mapę Folium z lokalizacjami szkół i zapisuje ją do pliku HTML.
@@ -312,6 +337,13 @@ def create_schools_map(
             filtered_class_details_per_school,
             school_summary_from_filtered
         )
+
+    heat_layer = None
+    if show_heatmap and not df_schools_to_display.empty:
+        heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
+        heat_layer = HeatMap(heat_data, name="HeatMap", show=False)
+        heat_layer.add_to(m)
+        _add_heatmap_toggle(m, heat_layer)
     try:
         m.save(str(output_path))
         print(f"✔ Mapa zapisana jako: {output_path}")
@@ -328,6 +360,7 @@ def main():
     max_ranking_poz = None   # np. 50
     min_class_points = None  # np. 140.0
     max_class_points = None  # np. 180.0
+    enable_heatmap = False
     # --- Koniec sekcji filtrów ---
 
     latest_excel_file = get_latest_xls_file(RESULTS_DIR, DATA_PATTERN)
@@ -403,7 +436,8 @@ def main():
         class_count_per_school=count_filtered_classes,
         filtered_class_details_per_school=detailed_filtered_classes_info,
         school_summary_from_filtered=school_summary_from_filtered,
-        filters_info_html=filters_info_html_str if any_filters_applied else "" # Tylko pokaż legendę jeśli są filtry
+        filters_info_html=filters_info_html_str if any_filters_applied else "",
+        show_heatmap=enable_heatmap
     )
 
 if __name__ == "__main__":

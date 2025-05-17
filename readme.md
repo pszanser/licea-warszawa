@@ -117,6 +117,7 @@ Posty o procesie tworzenia
 *   **Generowanie interaktywnej mapy:** Skrypt `scripts/visualization/generate_map.py` tworzy mapę.
 *   **Grupowanie znaczników na mapie:** Dzięki `folium.plugins.MarkerCluster` ikony szkół łączą się w klastry, co zmniejsza bałagan wizualny i poprawia czytelność przy małym powiększeniu mapy.
 *   **Tryb pełnoekranowy i przycisk "Znajdź mnie":** Mapa wykorzystuje wtyczki `Fullscreen` oraz `LocateControl`, pozwalając na wygodne przełączanie na pełny ekran i szybkie odnalezienie bieżącej lokalizacji użytkownika.
+*   **Opcjonalna warstwa HeatMap:** Można włączyć podgląd gęstości szkół przyciskiem na mapie (w pliku HTML) lub checkboxem w aplikacji Streamlit.
 *   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia aplikację webową.
 
 ## Uwagi
