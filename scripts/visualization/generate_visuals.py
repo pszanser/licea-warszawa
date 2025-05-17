@@ -398,10 +398,10 @@ def heatmap_subject_correlations(df_klasy_param, top_n: int = 10):
         matrix,
         x_labels=top_subjects,
         y_labels=top_subjects,
-        title="Korelacje rozszerzeń przedmiotowych",
+        title="Współwystępowanie rozszerzeń przedmiotowych",
         xlabel="Przedmiot",
         ylabel="Przedmiot",
-        filename="heatmap_subject_correlations.png",
+        filename="heatmap_subject_cooccurrence.png",
         cmap="OrRd",
     )
 
