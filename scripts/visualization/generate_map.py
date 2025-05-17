@@ -1,5 +1,5 @@
 import folium
-from folium.plugins import MarkerCluster
+from folium.plugins import MarkerCluster, Fullscreen, LocateControl
 import os
 from pathlib import Path
 import pandas as pd
@@ -288,6 +288,8 @@ def create_schools_map(
     wiele bliskich szkół nie nachodzi na siebie przy oddaleniu.
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
+    Fullscreen().add_to(m)
+    LocateControl().add_to(m)
 
     if filters_info_html:
         legend_html = f'''

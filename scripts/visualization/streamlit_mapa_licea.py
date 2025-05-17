@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 import folium
+from folium.plugins import Fullscreen, LocateControl
 from streamlit_folium import st_folium
 import numbers
 
@@ -37,6 +38,8 @@ def create_schools_map_streamlit(
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
+    Fullscreen().add_to(m)
+    LocateControl().add_to(m)
 
     if df_schools_to_display.empty:
         st.warning("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.")
