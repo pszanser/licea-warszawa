@@ -381,16 +381,16 @@ def bar_classes_per_district(df_klasy_param, df_szkoly_param):
     save_fig(fig, "bar_classes_per_district.png")
 
 # ==== HEATMAPA KORELACJI ROZSZERZEŃ ==================================
-def heatmap_subject_correlations(df_klasy_param, top_n: int = 10):
+def heatmap_subject_cooccurrence(df_klasy_param, top_n: int = 10):
     valid_cols = [s for s in SUBJECTS if s in df_klasy_param.columns]
     if not valid_cols:
-        print("Brak kolumn przedmiotów – pomijam heatmapę korelacji.")
+        print("Brak kolumn przedmiotów – pomijam heatmapę współwystępowania.")
         return
 
     top_subjects = get_top_subjects(df_klasy_param, top_n)
     df_sub = df_klasy_param[top_subjects]
     if df_sub.empty:
-        print("Brak danych do heatmapy korelacji.")
+        print("Brak danych do heatmapy współwystępowania.")
         return
 
     matrix = df_sub.T.dot(df_sub).values
@@ -559,7 +559,7 @@ def main():
         lollipop_diff_top30(df_klasy)
         histogram_threshold_distribution(df_klasy)
         bar_classes_per_district(df_klasy, df_szkoly)
-        heatmap_subject_correlations(df_klasy)
+        heatmap_subject_cooccurrence(df_klasy)
         scatter_rank_vs_threshold(df_szkoly)
         heatmap_profiles_by_district(df_klasy, df_szkoly)
         heatmap_subjects_by_district(df_klasy, df_szkoly)
