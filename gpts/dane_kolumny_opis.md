@@ -30,7 +30,7 @@
 | `Profil`                | tekst          | Skrócona forma profilu klasy (np. `mat-fiz`, `bio-chem`)         |
 | `RankingPoz`            | liczba (int)   | Pozycja szkoły w rankingu Perspektyw 2025                        |
 | `Prog_min_klasa`        | liczba (float) | Minimalna liczba punktów do tej klasy w 2024                     |
-| `Prog_min_szkola`       | liczba (float) | Min liczba punktów do szkoły w w 2024 (dolny przedział)          |
+| `Prog_min_szkola`       | liczba (float) | Min liczba punktów do szkoły w 2024 (dolny przedział)          |
 | `Prog_max_szkola`       | liczba (float) | Min liczba punktów do szkoły w 2024 (górny przedział)            |
 | `CzasDojazdu`           | liczba (int)   | Czas dojazdu do szkoły z Metra Wilanowska                        |
 | `SzkolaLat`             | liczba (float) | Szerokość geograficzna szkoły                                    |
