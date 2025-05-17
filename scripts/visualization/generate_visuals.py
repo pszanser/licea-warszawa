@@ -329,6 +329,109 @@ def stripplot_commute_district(df_szkoly_param):
     filename = "strip_commute_district.png"
     save_fig(fig, filename)
 
+# ==== HISTOGRAM PROGÓW PUNKTOWYCH ====================================
+def histogram_threshold_distribution(df_klasy_param):
+    if "Prog_min_klasa" not in df_klasy_param.columns and "Prog_min_szkola" not in df_klasy_param.columns:
+        print("Brak kolumny z progami – pomijam histogram progów punktowych.")
+        return
+
+    series = df_klasy_param.get("Prog_min_klasa")
+    if series is None:
+        series = df_klasy_param.get("Prog_min_szkola")
+    else:
+        series = series.fillna(df_klasy_param.get("Prog_min_szkola"))
+
+    data = series.dropna()
+    if data.empty:
+        print("Histogram progów: brak danych do wyświetlenia.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.histplot(data, bins=20, kde=True, color="skyblue", ax=ax)
+    ax.axvline(data.mean(), color="red", linestyle="--", label=f"Średnia: {data.mean():.1f}")
+    ax.set_xlabel("Minimalny próg punktowy")
+    ax.set_ylabel("Liczba klas")
+    ax.set_title("Rozkład minimalnych progów punktowych (klasy)")
+    ax.legend()
+    plt.tight_layout()
+    save_fig(fig, "hist_threshold_distribution.png")
+
+# ==== SŁUPKI: LICZBA KLAS NA DZIELNICĘ ================================
+def bar_classes_per_district(df_klasy_param, df_szkoly_param):
+    if df_szkoly_param is None:
+        print("Brak danych z arkusza 'szkoly' – pomijam wykres klas na dzielnice.")
+        return
+
+    df = merge_with_district(df_klasy_param, df_szkoly_param)
+    if "Dzielnica" not in df.columns:
+        print("Kolumna 'Dzielnica' niedostępna – pomijam wykres klas na dzielnice.")
+        return
+
+    counts = df["Dzielnica"].value_counts().sort_values(ascending=False)
+    if counts.empty:
+        print("Brak danych do wykresu klas na dzielnice.")
+        return
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(y=counts.index, x=counts.values, ax=ax, color="steelblue")
+    ax.set_xlabel("Liczba klas")
+    ax.set_ylabel("Dzielnica")
+    ax.set_title("Liczba klas licealnych w dzielnicach")
+    plt.tight_layout()
+    save_fig(fig, "bar_classes_per_district.png")
+
+# ==== HEATMAPA KORELACJI ROZSZERZEŃ ==================================
+def heatmap_subject_correlations(df_klasy_param, top_n: int = 10):
+    valid_cols = [s for s in SUBJECTS if s in df_klasy_param.columns]
+    if not valid_cols:
+        print("Brak kolumn przedmiotów – pomijam heatmapę korelacji.")
+        return
+
+    top_subjects = get_top_subjects(df_klasy_param, top_n)
+    df_sub = df_klasy_param[top_subjects]
+    if df_sub.empty:
+        print("Brak danych do heatmapy korelacji.")
+        return
+
+    matrix = df_sub.T.dot(df_sub).values
+    plot_heatmap_with_annotations(
+        matrix,
+        x_labels=top_subjects,
+        y_labels=top_subjects,
+        title="Korelacje rozszerzeń przedmiotowych",
+        xlabel="Przedmiot",
+        ylabel="Przedmiot",
+        filename="heatmap_subject_correlations.png",
+        cmap="OrRd",
+    )
+
+# ==== SCATTER: RANKING VS PRÓG PUNKTOWY ===============================
+def scatter_rank_vs_threshold(df_szkoly_param):
+    if df_szkoly_param is None:
+        print("Brak danych o szkołach – pomijam scatter rank vs próg.")
+        return
+
+    cols_needed = ["RankingPoz", "Prog_min_szkola"]
+    if any(c not in df_szkoly_param.columns for c in cols_needed):
+        print("Brak wymaganych kolumn do scatter rank vs próg.")
+        return
+
+    df = df_szkoly_param.dropna(subset=cols_needed)
+    if df.empty:
+        print("Scatter rank vs próg: brak kompletnych danych.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.scatter(df["RankingPoz"], df["Prog_min_szkola"], s=60, alpha=.7, edgecolor="k")
+    z = np.polyfit(df["RankingPoz"], df["Prog_min_szkola"], 1)
+    xp = np.linspace(df["RankingPoz"].min(), df["RankingPoz"].max(), 100)
+    ax.plot(xp, np.polyval(z, xp), linestyle="--")
+    ax.set_xlabel("Pozycja w rankingu (↓ = lepiej)")
+    ax.set_ylabel("Minimalny próg punktowy 2024")
+    ax.set_title("Ranking szkoły a minimalny próg punktowy")
+    plt.tight_layout()
+    save_fig(fig, "scatter_rank_vs_threshold.png")
+
 # ==== FUNKCJE POMOCNICZE ==============================================
 def _haversine_km(lat1, lon1, lat2, lon2):
     """Szybki haversine (km) dla skalarów lub wektorów NumPy."""
@@ -454,6 +557,10 @@ def main():
             heat_pairs(data, tag)
 
         lollipop_diff_top30(df_klasy)
+        histogram_threshold_distribution(df_klasy)
+        bar_classes_per_district(df_klasy, df_szkoly)
+        heatmap_subject_correlations(df_klasy)
+        scatter_rank_vs_threshold(df_szkoly)
         heatmap_profiles_by_district(df_klasy, df_szkoly)
         heatmap_subjects_by_district(df_klasy, df_szkoly)
         bubble_próg_vs_dojazd(df_szkoly)
