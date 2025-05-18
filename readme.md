@@ -1,3 +1,4 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/pszanser/licea-warszawa/pulls) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/pszanser/licea-warszawa?utm_source=oss&utm_medium=github&utm_campaign=pszanser%2Flicea-warszawa&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 # Projekt: Wybór szkoły średniej w Warszawie i okolicach
 Ten projekt służy do pobrania informacji o liceach, technikach i szkołach branżowych z systemu Vulcan,
 połączenia z danymi o progach punktowych z poprzednich lat,
@@ -15,6 +16,20 @@ Posty na LinkedIn o procesie tworzenia:
 Zapytaj Devina o to repozytorium:  
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pszanser/licea-warszawa)
 
+## Spis treści
+- [Projekt: Wybór szkoły średniej w Warszawie i okolicach](#projekt-wybór-szkoły-średniej-w-warszawie-i-okolicach)
+  - [Spis treści](#spis-treści)
+  - [Struktura katalogów](#struktura-katalogów)
+  - [Jak zacząć](#jak-zacząć)
+  - [Główne funkcjonalności](#główne-funkcjonalności)
+  - [Uwagi](#uwagi)
+  - [Wykorzystywane biblioteki](#wykorzystywane-biblioteki)
+    - [1. Analiza danych i obliczenia](#1-analiza-danych-i-obliczenia)
+    - [2. Przetwarzanie plików](#2-przetwarzanie-plików)
+    - [3. HTTP, API i web scraping](#3-http-api-i-web-scraping)
+    - [4. Wizualizacja i mapowanie](#4-wizualizacja-i-mapowanie)
+    - [5. Budowa interaktywnych aplikacji (dashboardów)](#5-budowa-interaktywnych-aplikacji-dashboardów)
+  - [Współtworzenie](#współtworzenie)
 
 ## Struktura katalogów
 
@@ -192,3 +207,9 @@ Poniżej grupuję wymienione biblioteki według głównych zastosowań i zamiesz
 
 * **Streamlit**
   Prosty framework do szybkiego tworzenia interaktywnych aplikacji webowych (dashboardów, wizualizacji), bez konieczności znajomości front-endu.
+
+## Współtworzenie
+
+Chętnie przyjmę sugestie i poprawki. Jeśli masz pomysł na usprawnienie skryptów
+lub uzupełnienie dokumentacji, otwórz issue albo wyślij pull request.
+Każda forma dzielenia się wiedzą jest mile widziana!
