@@ -142,6 +142,9 @@ def main():
         show_histogram = st.checkbox("Rozkład progów punktowych", value=True)
         show_bar_district = st.checkbox("Liczba klas w dzielnicach", value=True)
         show_scatter_rank = st.checkbox("Ranking vs próg punktowy", value=True)
+        show_cooccurrence = st.checkbox("Współwystępowanie rozszerzeń", value=False)
+        show_bubble_commute = st.checkbox("Czas dojazdu vs próg (bąbelkowy)", value=False)
+        show_hidden_gems = st.checkbox("Hidden gems", value=False)
 
     df_filtered_classes = apply_filters_to_classes(
         df_classes_raw,
@@ -300,16 +303,37 @@ def main():
             fig = plots.histogram_threshold_distribution(df_filtered_classes)
             if fig:
                 st.pyplot(fig)
+                st.caption("Rozkład minimalnych progów punktowych w klasach. Przerywana linia oznacza średnią wartości.")
 
         if show_bar_district:
             fig = plots.bar_classes_per_district(df_filtered_classes, df_schools_to_display)
             if fig:
                 st.pyplot(fig)
+                st.caption("Liczba klas licealnych w poszczególnych dzielnicach. Dłuższy słupek to więcej klas.")
 
         if show_scatter_rank:
             fig = plots.scatter_rank_vs_threshold(df_schools_to_display)
             if fig:
                 st.pyplot(fig)
+                st.caption("Zależność pozycji w rankingu od minimalnego progu punktowego. Linia trendu pokazuje ogólną korelację.")
+
+        if show_cooccurrence:
+            fig = plots.heatmap_subject_cooccurrence(df_filtered_classes)
+            if fig:
+                st.pyplot(fig)
+                st.caption("Ciepło oznacza częste łączenie dwóch rozszerzeń w jednej klasie.")
+
+        if show_bubble_commute:
+            fig = plots.bubble_prog_vs_dojazd(df_schools_to_display)
+            if fig:
+                st.pyplot(fig)
+                st.caption("Czas dojazdu a próg punktowy szkoły. Wielkość bąbelka zależy od miejsca w rankingu, kolor od dzielnicy.")
+
+        if show_hidden_gems:
+            fig = plots.scatter_hidden_gems(df_schools_to_display)
+            if fig:
+                st.pyplot(fig)
+                st.caption("Wyróżnione czerwone punkty to wysoko oceniane szkoły z długim dojazdem – tzw. hidden gems.")
 
 if __name__ == "__main__":
     main()
