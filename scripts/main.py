@@ -197,8 +197,14 @@ def oblicz_czasy_dojazdu(df_szkoly):
     elif POBIERZ_NOWE_CZASY:
         logger.info(f"Pobieranie danych z Google Maps API dla adresu: {ADRES_DOMOWY}...")
         t_api_start = time.perf_counter()
-        destination_addresses = df_szkoly["AdresSzkoly"].unique().tolist() # Użyj unikalnych adresów
-        logger.info(f"  Pobieranie czasów dojazdu dla {len(destination_addresses)} unikalnych adresów szkół")
+        # łącz nazwy szkół z adresami, aby zwiększyć precyzję geokodowania
+        df_szkoly["PelenAdres"] = (
+            df_szkoly["NazwaSzkoly"].str.strip() + ", " + df_szkoly["AdresSzkoly"].str.strip()
+        )
+        destination_addresses = df_szkoly["PelenAdres"].unique().tolist()  # użyj unikalnych pełnych adresów
+        logger.info(
+            f"  Pobieranie czasów dojazdu dla {len(destination_addresses)} unikalnych adresów szkół"
+        )
         gmaps_client = googlemaps.Client(key=api_key)
         
         # Pobieranie czasów dojazdu
@@ -218,7 +224,7 @@ def oblicz_czasy_dojazdu(df_szkoly):
             travel_times_dict.update(batch_travel_times)
             time.sleep(0.25) # Zgodnie z pierwotnym kodem
         
-        df_szkoly["CzasDojazdu"] = df_szkoly["AdresSzkoly"].map(travel_times_dict)
+        df_szkoly["CzasDojazdu"] = df_szkoly["PelenAdres"].map(travel_times_dict)
         missing_travel_time_count = df_szkoly["CzasDojazdu"].isna().sum()
         if missing_travel_time_count > 0:
             logger.warning(f"OSTRZEŻENIE: {missing_travel_time_count} adresów nie ma przypisanego czasu dojazdu.")
@@ -226,9 +232,9 @@ def oblicz_czasy_dojazdu(df_szkoly):
         # Pobieranie współrzędnych
         logger.info(f"  Pobieranie współrzędnych dla {len(destination_addresses)} unikalnych adresów szkół")
         coordinates_dict = get_coordinates_for_addresses_batch(gmaps_client, destination_addresses)
-        
-        df_szkoly["SzkolaLat"] = df_szkoly["AdresSzkoly"].map(lambda addr: coordinates_dict.get(addr, (None, None))[0])
-        df_szkoly["SzkolaLon"] = df_szkoly["AdresSzkoly"].map(lambda addr: coordinates_dict.get(addr, (None, None))[1])
+
+        df_szkoly["SzkolaLat"] = df_szkoly["PelenAdres"].map(lambda addr: coordinates_dict.get(addr, (None, None))[0])
+        df_szkoly["SzkolaLon"] = df_szkoly["PelenAdres"].map(lambda addr: coordinates_dict.get(addr, (None, None))[1])
         missing_coords_count = df_szkoly["SzkolaLat"].isna().sum() # Sprawdzamy tylko Lat, Lon powinien być NaN razem z Lat
         if missing_coords_count > 0:
             logger.warning(f"OSTRZEŻENIE: {missing_coords_count} adresów nie ma przypisanych współrzędnych.")
@@ -239,8 +245,10 @@ def oblicz_czasy_dojazdu(df_szkoly):
         logger.info(f"Zapisywanie czasów dojazdu i współrzędnych do {CZASY_DOJAZDU_FILE}...")
         # Upewnij się, że zapisujesz unikalne kombinacje SzkolaIdentyfikator/AdresSzkoly, jeśli df_szkoly może mieć duplikaty przed tym etapem
         # Na tym etapie df_szkoly zawiera unikalne szkoły, więc jest OK.
+        # kolumna pomocnicza nie jest potrzebna w dalszych etapach
         df_to_save = df_szkoly[["SzkolaIdentyfikator", "AdresSzkoly", "CzasDojazdu", "SzkolaLat", "SzkolaLon"]].drop_duplicates()
         df_to_save.to_excel(CZASY_DOJAZDU_FILE, index=False)
+        df_szkoly.drop(columns=["PelenAdres"], inplace=True)
 
     elif CZASY_DOJAZDU_FILE.exists():
         logger.info(f"Wczytywanie czasów dojazdu i współrzędnych z {CZASY_DOJAZDU_FILE}...")

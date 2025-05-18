@@ -111,7 +111,7 @@ Posty o procesie tworzenia
 *   **Wczytywanie progów punktowych:** Dane o progach wczytywane są przez `scripts/data_processing/load_minimum_points.py`.
 *   **Obliczanie czasów dojazdu i geokodowanie:**
     *   Skrypt `main.py` (korzystając z `scripts/api_clients/googlemaps_api.py`) oblicza czasy dojazdu z adresu domowego (z `scripts/config/config.yml`).
-    *   Wykorzystuje **Google Maps API**.
+    *   W zapytaniach do **Google Maps API** przekazywana jest pełna fraza zawierająca nazwę szkoły i jej adres, co zwiększa precyzję geokodowania.
 *   **Normalizacja i łączenie danych:** 
 *   **Filtrowanie:** 
 *   **Scoring:** Opcjonalnie obliczany jest wskaźnik przez `scripts/analysis/score.py`.
