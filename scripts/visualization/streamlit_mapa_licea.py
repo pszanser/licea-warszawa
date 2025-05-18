@@ -79,7 +79,10 @@ def main():
         st.error("Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana.")
         return
     
-    st.write(f"Załadowano dane z pliku: **{latest_excel_file.name}**")
+    # prezentujemy nazwę tylko przy lokalnym uruchomieniu
+    # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
+    if "_SL" not in latest_excel_file.name:
+        st.write(f"Załadowano dane z pliku: **{latest_excel_file.name}**")
     
     available_subjects = get_subjects_from_dataframe(df_classes_raw)
     
@@ -225,10 +228,7 @@ def main():
         show_heatmap=show_heatmap
     )
 
-    tab_map, tab_viz = st.tabs(["🗺️Mapa", "📊Wizualizacje"])
-
-    with tab_map:
-        if not df_schools_to_display.empty:
+    if not df_schools_to_display.empty:
             total_schools = len(df_schools_raw)
             total_classes = len(df_classes_raw)
             matching_schools = len(df_schools_to_display)
@@ -253,6 +253,9 @@ def main():
                 else:
                     st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
+    tab_map, tab_viz = st.tabs(["🗺️Mapa", "📊Wizualizacje"])
+
+    with tab_map:
         st.subheader("Mapa szkół")
         st_folium(map_object, width=None, height=600, returned_objects=[])
 
