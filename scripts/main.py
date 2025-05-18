@@ -42,6 +42,8 @@ POBIERZ_NOWE_CZASY = CFG.get("pobierz_nowe_czasy", True)
 DEPARTURE_HOUR = CFG.get("departure_hour", 7)
 DEPARTURE_MINUTE = CFG.get("departure_minute", 30)
 LICZ_SCORE = CFG.get("licz_score", False)
+FILTR_MIASTO = CFG.get("filtr_miasto")
+FILTR_TYP_SZKOLA = CFG.get("filtr_typ_szkola")
 
 # Tworzenie nazwy pliku finalnego na podstawie adresu domowego
 adres_bez_znakow = re.sub(r"\W+", "_", ADRES_DOMOWY).strip("_")
@@ -102,8 +104,18 @@ def wczytaj_dane_vulcan():
 def przetworz_dane_vulcan(df_vulcan):
     t0 = time.perf_counter()
     df_vulcan["TypSzkoly"] = df_vulcan["NazwaSzkoly"].apply(get_school_type)
-    df_vulcan = df_vulcan[df_vulcan["AdresSzkoly"].str.contains("Warszawa", na=False, case=False)]
-    df_vulcan = df_vulcan[df_vulcan["TypSzkoly"] == "liceum"]
+    # Opcjonalne filtrowanie danych na podstawie konfiguracji
+    if FILTR_MIASTO:
+        df_vulcan = df_vulcan[df_vulcan["AdresSzkoly"].str.contains(
+            FILTR_MIASTO, na=False, case=False
+        )]
+
+    if FILTR_TYP_SZKOLA:
+        typy = FILTR_TYP_SZKOLA
+        if isinstance(typy, str):
+            typy = [typy]
+        df_vulcan = df_vulcan[df_vulcan["TypSzkoly"].isin(typy)]
+
     df_vulcan["SzkolaIdentyfikator"] = df_vulcan["NazwaSzkoly"].apply(normalize_name)
     df_vulcan["Kod"] = df_vulcan["AdresSzkoly"].str.extract(r"(\d{2}-\d{3})")
     df_pc = pd.read_csv(KODY_FILE, dtype=str)

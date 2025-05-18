@@ -6,6 +6,10 @@ departure_minute: 30                         # Minuta wyjazdu
 googlemaps_batch_size: 25
 licz_score: false                            # Czy liczyć score (algorytm rankingowy)
 
+# Domyślne filtry danych (puste = brak filtrów)
+filtr_miasto:                                # np. "Warszawa"
+filtr_typ_szkola: []                         # np. ["liceum"]
+
 # Parametry rankingowe
 P: 170               # prognozowana liczba punktów
 # wagi – możesz zmieniać bez grzebania w kodzie

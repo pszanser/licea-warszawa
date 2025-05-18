@@ -84,7 +84,15 @@ def main():
     
     with st.sidebar:
         st.header("Filtry")
-        
+
+        st.subheader("Typ szkoły")
+        school_type_options = ["liceum", "technikum", "branżowa"]
+        selected_school_types = st.multiselect(
+            "Wybierz typ szkoły:",
+            school_type_options,
+            default=school_type_options
+        )
+
         st.subheader("Ranking Perspektyw 2025")
         use_ranking_filter = st.checkbox("Filtruj według pozycji w rankingu", value=False)
         max_ranking_poz_filter = None
@@ -137,8 +145,16 @@ def main():
 
         show_heatmap = st.checkbox("Pokaż mapę cieplną szkół", value=False)
 
+    # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
+    if selected_school_types:
+        df_classes_by_type = df_classes_raw[df_classes_raw["TypSzkoly"].isin(selected_school_types)]
+        df_schools_by_type = df_schools_raw[df_schools_raw["TypSzkoly"].isin(selected_school_types)]
+    else:
+        df_classes_by_type = df_classes_raw
+        df_schools_by_type = df_schools_raw
+
     df_filtered_classes = apply_filters_to_classes(
-        df_classes_raw,
+        df_classes_by_type,
         wanted_subjects=wanted_subjects_filter,
         avoided_subjects=avoided_subjects_filter,
         max_ranking_poz=max_ranking_poz_filter,
@@ -152,7 +168,8 @@ def main():
         avoided_subjects_filter,
         max_ranking_poz_filter is not None,
         min_class_points_filter is not None,
-        max_class_points_filter is not None
+        max_class_points_filter is not None,
+        len(selected_school_types) != len(school_type_options)
     ])
 
     if df_filtered_classes.empty and any_filters_active:
@@ -163,9 +180,11 @@ def main():
 
     df_schools_to_display, count_filtered_classes, \
     detailed_filtered_classes_info, school_summary_from_filtered = \
-        aggregate_filtered_class_data(df_filtered_classes, df_schools_raw, any_filters_active)
+        aggregate_filtered_class_data(df_filtered_classes, df_schools_by_type, any_filters_active)
     
     filter_entries = []
+    if len(selected_school_types) != len(school_type_options):
+        filter_entries.append(("Typ szkoły", ", ".join(selected_school_types)))
     if wanted_subjects_filter:
         filter_entries.append(("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter)))
     if avoided_subjects_filter:
