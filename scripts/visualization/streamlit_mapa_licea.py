@@ -151,7 +151,6 @@ def main():
         show_scatter_rank = st.checkbox("Ranking vs próg punktowy", value=True)
         show_cooccurrence = st.checkbox("Współwystępowanie rozszerzeń", value=False)
         show_bubble_commute = st.checkbox("Czas dojazdu vs próg (bąbelkowy)", value=False)
-        show_hidden_gems = st.checkbox("Hidden gems", value=False)
         
     # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
     if selected_school_types:
@@ -346,12 +345,6 @@ def main():
             if fig:
                 st.pyplot(fig)
                 st.caption("Czas dojazdu a próg punktowy szkoły. Wielkość bąbelka zależy od miejsca w rankingu, kolor od dzielnicy.")
-
-        if show_hidden_gems:
-            fig = plots.scatter_hidden_gems(df_schools_to_display)
-            if fig:
-                st.pyplot(fig)
-                st.caption("Wyróżnione czerwone punkty to wysoko oceniane szkoły z długim dojazdem – tzw. hidden gems.")
 
 if __name__ == "__main__":
     main()
