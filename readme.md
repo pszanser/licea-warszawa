@@ -1,15 +1,20 @@
-# Projekt: Wybór liceum w Warszawie
-Ten projekt służy do pobrania informacji o liceach z systemu Vulcan,
+# Projekt: Wybór szkoły średniej w Warszawie i okolicach
+Ten projekt służy do pobrania informacji o liceach, technikach i szkołach branżowych z systemu Vulcan,
 połączenia z danymi o progach punktowych z poprzednich lat,
-rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps
+rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps komunikają miejską
 oraz generowania różnorodnych wizualizacji ułatwiających analizę.
 
-Interaktywna mapa jest dostępna na https://licea-warszawa-2025.streamlit.app/
+**Interaktywna mapa** i wizualizację są dostępne na https://licea-warszawa-2025.streamlit.app/
 
-Posty o procesie tworzenia
-[1](https://www.linkedin.com/posts/pszanser_sgh-liceum-edukacja-activity-7323984277598040065-8DO0)
-[2](https://www.linkedin.com/posts/pszanser_asystent-ai-do-wyboru-liceum-w-warszawie-activity-7328660490576990209-5mo8)
-[3](https://www.linkedin.com/posts/pszanser_liceum-edukacja-warszawa-activity-7328808246729658368-sw5m)
+Posty na LinkedIn o procesie tworzenia:  
+[1 - Python -> Excel](https://www.linkedin.com/posts/pszanser_sgh-liceum-edukacja-activity-7323984277598040065-8DO0)  
+[2 - Excel -> Asystent AI](https://www.linkedin.com/posts/pszanser_asystent-ai-do-wyboru-liceum-w-warszawie-activity-7328660490576990209-5mo8)  
+[3 - Excel -> Aplikacja z mapą](https://www.linkedin.com/posts/pszanser_liceum-edukacja-warszawa-activity-7328808246729658368-sw5m)  
+
+
+Zapytaj Devina o to repozytorium:  
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pszanser/licea-warszawa)
+
 
 ## Struktura katalogów
 
