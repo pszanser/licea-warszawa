@@ -48,6 +48,7 @@ Posty o procesie tworzenia
 │       ├── __init__.py
 │       ├── generate_map.py
 │       ├── generate_visuals.py
+│       ├── plots.py
 │       └── streamlit_mapa_licea.py
 ├── requirements.txt      # Lista zależności Python
 └── README.md             # Ten plik
