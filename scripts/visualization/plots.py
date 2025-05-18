@@ -100,6 +100,8 @@ def lollipop_diff_top30(df_klasy_param: pd.DataFrame):
     top_profiles = get_top_n(df_klasy_param["Profil"], 10)
 
     def prof_pct(subset):
+        if len(subset) == 0:
+            return pd.Series(0, index=top_profiles, dtype=float)
         return (
             subset["Profil"].value_counts()
             .reindex(top_profiles).fillna(0) / len(subset) * 100
