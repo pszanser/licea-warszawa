@@ -61,6 +61,14 @@ def create_schools_map_streamlit(
         HeatMap(heat_data, name="HeatMap").add_to(m)
     return m
 
+@st.cache_data
+def get_unique_school_names(df_schools):
+    """
+    Get sorted unique school names from the dataframe.
+    This function is cached by Streamlit to avoid recomputing on every rerun.
+    """
+    return sorted(df_schools["NazwaSzkoly"].unique())
+
 def main():
     st.title("🏫 Mapa szkół średnich - Warszawa i okolice (2025)")
     st.markdown("""
@@ -108,7 +116,7 @@ def main():
             )
 
         st.subheader("Nazwa szkoły")
-        school_names = sorted(df_schools_raw["NazwaSzkoly"].unique())
+        school_names = get_unique_school_names(df_schools_raw)
         selected_school_names = st.multiselect(
             "Wybierz szkoły do wyświetlenia:",
             school_names,
