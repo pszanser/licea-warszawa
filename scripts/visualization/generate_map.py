@@ -212,7 +212,13 @@ def add_school_markers_to_map(
         szk_id = row.get("SzkolaIdentyfikator")
 
         popup_html = f"<b>{row['NazwaSzkoly']}</b><br>"
-        popup_html += f"Adres: {row['AdresSzkoly']}<br>"
+        nav_url = (
+            "https://www.google.com/maps/dir/?api=1&destination="
+            f"{row['SzkolaLat']},{row['SzkolaLon']}"
+        )
+        popup_html += (
+            f"Adres: <a href='{nav_url}' target='_blank'>{row['AdresSzkoly']}</a><br>"
+        )
         popup_html += f"Dzielnica: {row['Dzielnica']}<br>"
 
         summary = school_summary_from_filtered.get(szk_id, {})
