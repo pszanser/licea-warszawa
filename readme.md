@@ -140,6 +140,7 @@ Zapytaj Devina o to repozytorium:
 *   **Grupowanie znaczników na mapie:** Dzięki `folium.plugins.MarkerCluster` ikony szkół łączą się w klastry, co zmniejsza bałagan wizualny i poprawia czytelność przy małym powiększeniu mapy.
 *   **Tryb pełnoekranowy i przycisk "Znajdź mnie":** Mapa wykorzystuje wtyczki `Fullscreen` oraz `LocateControl`, pozwalając na wygodne przełączanie na pełny ekran i szybkie odnalezienie bieżącej lokalizacji użytkownika.
 *   **Opcjonalna warstwa HeatMap:** Można włączyć podgląd gęstości szkół przyciskiem na mapie (w pliku HTML) lub checkboxem w aplikacji Streamlit.
+*   **Nawigacja do szkoły:** W okienku informacji adres szkoły jest klikalny i otwiera Google Maps z trasą do wybranej placówki.
 *   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia aplikację webową.
 
 ## Uwagi
