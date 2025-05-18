@@ -2,7 +2,7 @@ import streamlit as st
 
 # Ustawienie konfiguracji strony musi być pierwszym poleceniem Streamlit
 st.set_page_config(
-    page_title="Mapa liceów warszawskich 2025",
+    page_title="Mapa szkół średnich - Warszawa i okolice (2025)",
     page_icon="🏫",
     layout="wide",
 )
@@ -62,9 +62,9 @@ def create_schools_map_streamlit(
     return m
 
 def main():
-    st.title("🏫 Mapa liceów warszawskich 2025")
+    st.title("🏫 Mapa szkół średnich - Warszawa i okolice (2025)")
     st.markdown("""
-    Aplikacja umożliwia interaktywne przeglądanie liceów warszawskich i filtrowanie ich według różnych kryteriów.
+    Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
     """)
     
     latest_excel_file = get_latest_xls_file(RESULTS_DIR, DATA_PATTERN)
@@ -90,17 +90,16 @@ def main():
         school_type_options = ["liceum", "technikum", "branżowa"]
         selected_school_types = st.multiselect(
             "Wybierz typ szkoły:",
-            school_type_options,
-            default=school_type_options
+            school_type_options
         )
 
         st.subheader("Ranking Perspektyw 2025")
-        use_ranking_filter = st.checkbox("Filtruj według pozycji w rankingu", value=False)
+        use_ranking_filter = st.checkbox("Filtruj według pozycji w rankingu liceów", value=False)
         max_ranking_poz_filter = None
         if use_ranking_filter:
             max_ranking_positions = [10, 20, 30, 40, 50, 100]
             max_ranking_poz_filter = st.selectbox(
-                "Pokaż szkoły z TOP:",
+                "Pokaż licea z TOP:",
                 max_ranking_positions,
                 index=2
             )
@@ -189,7 +188,7 @@ def main():
         aggregate_filtered_class_data(df_filtered_classes, df_schools_by_type, any_filters_active)
     
     filter_entries = []
-    if len(selected_school_types) != len(school_type_options):
+    if selected_school_types:
         filter_entries.append(("Typ szkoły", ", ".join(selected_school_types)))
     if wanted_subjects_filter:
         filter_entries.append(("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter)))
@@ -224,7 +223,7 @@ def main():
         show_heatmap=show_heatmap
     )
 
-    tab_map, tab_viz = st.tabs(["Mapa", "Wizualizacje"])
+    tab_map, tab_viz = st.tabs(["🗺️Mapa", "📊Wizualizacje"])
 
     with tab_map:
         if not df_schools_to_display.empty:
@@ -264,7 +263,7 @@ def main():
                     filters_df.to_excel(writer, index=False, sheet_name="Parametry")
             buf.seek(0)
             st.download_button(
-                label="📥 Pobierz dane klas (Excel)",
+                label="📥Pobierz dane klas (Excel)",
                 data=buf,
                 file_name="moje_klasy.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
