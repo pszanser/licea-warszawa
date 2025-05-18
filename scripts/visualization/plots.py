@@ -382,7 +382,9 @@ def scatter_density_vs_rank(df_szkoly_param: pd.DataFrame, radius_km: float = 1.
     lon = np.radians(df["SzkolaLon"].values)
     sin_lat, cos_lat = np.sin(lat), np.cos(lat)
     dlon = lon[:, None] - lon
-    d = np.arccos((sin_lat[:, None] * sin_lat) + (cos_lat[:, None] * cos_lat) * np.cos(dlon))
+    cos_val = (sin_lat[:, None] * sin_lat) + (cos_lat[:, None] * cos_lat) * np.cos(dlon)
+    cos_val = np.clip(cos_val, -1.0, 1.0)
+    d = np.arccos(cos_val)
     dist_km = 6371.0 * d
     np.fill_diagonal(dist_km, np.inf)
     df["Nearby1km"] = (dist_km <= radius_km).sum(axis=1)
