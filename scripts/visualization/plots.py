@@ -8,13 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import sys
 
 # Pozostałe moduły z projektu
-from ..config.constants import ALL_SUBJECTS as SUBJECTS
-
-# Stałe pomocnicze
-WARSAW_CENTER_LAT = 52.2319  # Pałac Kultury i Nauki
-WARSAW_CENTER_LON = 21.0067
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config.constants import ALL_SUBJECTS as SUBJECTS, WARSAW_CENTER_LAT, WARSAW_CENTER_LON
 
 # ---------------------------------------------------------------------------
 # Helpery
@@ -194,7 +192,7 @@ def heatmap_subjects_by_district(df_klasy_param: pd.DataFrame, df_szkoly_param: 
     return fig
 
 
-def bubble_próg_vs_dojazd(df_szkoly_param: pd.DataFrame):
+def bubble_prog_vs_dojazd(df_szkoly_param: pd.DataFrame):
     if df_szkoly_param is None or df_szkoly_param["CzasDojazdu"].isna().all():
         print("Brak kolumny CzasDojazdu – pomijam bubble-chart.")
         return None

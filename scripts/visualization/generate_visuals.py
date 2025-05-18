@@ -4,14 +4,15 @@ from pathlib import Path
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import sys
 
 # Import funkcji generujących wykresy
-from .plots import (
+from plots import (
     heat_pairs,
     lollipop_diff_top30,
     heatmap_profiles_by_district,
     heatmap_subjects_by_district,
-    bubble_próg_vs_dojazd,
+    bubble_prog_vs_dojazd,
     heatmap_rank_commute,
     stripplot_commute_district,
     histogram_threshold_distribution,
@@ -23,6 +24,7 @@ from .plots import (
     scatter_hidden_gems,
 )
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config.constants import ALL_SUBJECTS as SUBJECTS
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -128,9 +130,9 @@ def main():
         if fig:
             save_fig(fig, "heatmap_subjects_by_district.png")
 
-        fig = bubble_próg_vs_dojazd(df_szkoly)
+        fig = bubble_prog_vs_dojazd(df_szkoly)
         if fig:
-            save_fig(fig, "bubble_próg_vs_dojazd.png")
+            save_fig(fig, "bubble_prog_vs_dojazd.png")
 
         fig = heatmap_rank_commute(df_szkoly)
         if fig:
