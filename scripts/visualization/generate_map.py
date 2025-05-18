@@ -266,11 +266,15 @@ def add_school_markers_to_map(
 
         popup_html = f"<div style='font-size:14px; line-height:1.2;'>{popup_html}</div>"
 
+        school_type = str(row.get("TypSzkoly", "").lower())
+        color_map = {"liceum": "blue", "technikum": "green", "branżowa": "red"}
+        marker_color = color_map.get(school_type, "blue")
+
         folium.Marker(
             location=[row["SzkolaLat"], row["SzkolaLon"]],
             tooltip=tooltip_text,
             popup=folium.Popup(popup_html, max_width=350),
-            icon=folium.Icon(color="blue", icon="graduation-cap", prefix="fa")
+            icon=folium.Icon(color=marker_color, icon="graduation-cap", prefix="fa")
         ).add_to(cluster)
 
 

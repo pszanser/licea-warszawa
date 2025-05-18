@@ -81,6 +81,7 @@ Posty o procesie tworzenia
         *   Opcjonalnie zmień `departure_hour` i `departure_minute` dla obliczeń czasu dojazdu.
         *   Ustaw `pobierz_nowe_czasy` na `True`, jeśli chcesz pobrać świeże dane o czasach dojazdu (domyślnie `True`).
         *   Ustaw `licz_score` na `True`, jeśli chcesz obliczyć złożony wskaźnik dla szkół.
+        *   `filtr_miasto` i `filtr_typ_szkola` pozwalają wstępnie ograniczyć dane już na etapie `main.py`. Pozostaw pustą wartość, aby nie stosować filtrów.
 5.  Umieść wymagane pliki w folderze `data/`.
 6.  Uruchom główny skrypt przetwarzający dane (z katalogu głównego projektu, np. `Licea/`):
     ```powershell
@@ -110,7 +111,7 @@ Posty o procesie tworzenia
 *   **Wczytywanie progów punktowych:** Dane o progach wczytywane są przez `scripts/data_processing/load_minimum_points.py`.
 *   **Obliczanie czasów dojazdu i geokodowanie:**
     *   Skrypt `main.py` (korzystając z `scripts/api_clients/googlemaps_api.py`) oblicza czasy dojazdu z adresu domowego (z `scripts/config/config.yml`).
-    *   Wykorzystuje **Google Maps API**.
+    *   W zapytaniach do **Google Maps API** przekazywana jest pełna fraza zawierająca nazwę szkoły i jej adres, co zwiększa precyzję geokodowania.
 *   **Normalizacja i łączenie danych:** 
 *   **Filtrowanie:** 
 *   **Scoring:** Opcjonalnie obliczany jest wskaźnik przez `scripts/analysis/score.py`.
