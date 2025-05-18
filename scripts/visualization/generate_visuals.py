@@ -3,6 +3,7 @@
 from pathlib import Path
 import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
@@ -75,12 +76,19 @@ def ensure_subject_columns(df: pd.DataFrame):
 
 
 def add_profile_column(df: pd.DataFrame):
-    subject_codes = {s: s[:3] if len(s) > 3 else s for s in SUBJECTS}
-    if "Profil" not in df.columns:
-        def make_prof(r):
-            active_subjects = [s for s in SUBJECTS if s in r and r[s] == 1]
-            return "-".join(sorted(subject_codes[s] for s in active_subjects))
-        df["Profil"] = df.apply(make_prof, axis=1)
+    if "Profil" in df.columns:
+        return
+
+    subj_cols = [s for s in SUBJECTS if s in df.columns]
+    codes = pd.Index(subj_cols).str.slice(0, 3)
+    df["Profil"] = (
+        df[subj_cols]
+        .astype(int)
+        .dot(np.eye(len(subj_cols), dtype=int))
+        .astype(bool)
+        .dot(codes + "-")
+        .str.rstrip("-")
+    )
 
 
 def main():
