@@ -28,6 +28,7 @@ from visualization.generate_map import (
     get_subjects_from_dataframe, apply_filters_to_classes,
     aggregate_filtered_class_data, add_school_markers_to_map
 )
+from visualization import plots
 
 def create_schools_map_streamlit(
     df_schools_to_display: pd.DataFrame,
@@ -137,6 +138,11 @@ def main():
 
         show_heatmap = st.checkbox("Pokaż mapę cieplną szkół", value=False)
 
+        st.subheader("Wykresy")
+        show_histogram = st.checkbox("Rozkład progów punktowych", value=True)
+        show_bar_district = st.checkbox("Liczba klas w dzielnicach", value=False)
+        show_scatter_rank = st.checkbox("Ranking vs próg punktowy", value=False)
+
     df_filtered_classes = apply_filters_to_classes(
         df_classes_raw,
         wanted_subjects=wanted_subjects_filter,
@@ -199,99 +205,111 @@ def main():
         show_heatmap=show_heatmap
     )
 
-    if not df_schools_to_display.empty:
-        total_schools = len(df_schools_raw)
-        total_classes = len(df_classes_raw) # Całkowita liczba klas przed filtrowaniem
-        matching_schools = len(df_schools_to_display)
-        # Całkowita liczba pasujących klas (suma wartości w count_filtered_classes)
-        matching_classes = sum(count_filtered_classes.values()) if count_filtered_classes else 0
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("**Szkoły**", f"{matching_schools} / {total_schools}")
-        with col2:
-            st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
-        with col3:
-            # Średni próg: najpierw Prog_min_klasa, jeśli puste – Prog_min_szkola
-            avg_points = None
-            if not df_filtered_classes.empty:
-                serie = df_filtered_classes.apply(
-                    lambda r: r["Prog_min_klasa"]
-                              if pd.notna(r["Prog_min_klasa"])
-                              else r["Prog_min_szkola"],
-                    axis=1
-                )
-                avg_points = serie.mean()
+    tab_map, tab_viz = st.tabs(["Mapa", "Wizualizacje"])
 
-            if avg_points is not None:
-                st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
-            else:
-                st.metric("**Średni próg (pasujące klasy)**", "N/A")
+    with tab_map:
+        if not df_schools_to_display.empty:
+            total_schools = len(df_schools_raw)
+            total_classes = len(df_classes_raw)
+            matching_schools = len(df_schools_to_display)
+            matching_classes = sum(count_filtered_classes.values()) if count_filtered_classes else 0
 
-    st.subheader("Mapa szkół")
-    st_folium(map_object, width=None, height=600, returned_objects=[])
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("**Szkoły**", f"{matching_schools} / {total_schools}")
+            with col2:
+                st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
+            with col3:
+                avg_points = None
+                if not df_filtered_classes.empty:
+                    serie = df_filtered_classes.apply(
+                        lambda r: r["Prog_min_klasa"] if pd.notna(r["Prog_min_klasa"]) else r["Prog_min_szkola"],
+                        axis=1,
+                    )
+                    avg_points = serie.mean()
 
-    if not df_filtered_classes.empty:
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
-            if filter_entries:
-                filters_df = pd.DataFrame(filter_entries, columns=["Filtr", "Wartość"])
-                filters_df.to_excel(writer, index=False, sheet_name="Parametry")
-        buf.seek(0)
-        st.download_button(
-            label="📥 Pobierz dane klas (Excel)",
-            data=buf,
-            file_name="moje_klasy.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-    
-    if not df_schools_to_display.empty:
-        with st.expander("Pokaż listę pasujących szkół", expanded=False):
-            schools_summary_list = []
-            for _, school_row in df_schools_to_display.iterrows():
-                szk_id = school_row["SzkolaIdentyfikator"]
-                class_count = count_filtered_classes.get(szk_id, 0)
-                
-                min_threshold_from_filtered_classes = None
-                if szk_id in school_summary_from_filtered and 'Prog_min_szkola' in school_summary_from_filtered[szk_id]:
-                     min_threshold_from_filtered_classes = school_summary_from_filtered[szk_id]['Prog_min_szkola']
-                elif szk_id in detailed_filtered_classes_info: # Fallback if summary not fully populated
-                    thresholds = [
-                        class_info.get("min_pkt_klasy")
-                        for class_info in detailed_filtered_classes_info[szk_id]
-                        if class_info.get("min_pkt_klasy") is not None
-                    ]
-                    if thresholds:
-                        min_threshold_from_filtered_classes = min(thresholds)
-                
-                display_ranking = school_row.get("RankingPoz", "-")
-                if pd.notna(display_ranking) and display_ranking != "-":
-                     display_ranking = int(display_ranking) if display_ranking == display_ranking // 1 else display_ranking
+                if avg_points is not None:
+                    st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
+                else:
+                    st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
+        st.subheader("Mapa szkół")
+        st_folium(map_object, width=None, height=600, returned_objects=[])
 
-                schools_summary_list.append({
-                    "Nazwa szkoły": school_row["NazwaSzkoly"],
-                    "Dzielnica": school_row["Dzielnica"],
-                    "Ranking": display_ranking,
-                    "Liczba pasujących klas": class_count,
-                    "Min. próg pkt. (z pasujących klas)": min_threshold_from_filtered_classes if pd.notna(min_threshold_from_filtered_classes) else "-"
-                })
-            
-            schools_summary_df = pd.DataFrame(schools_summary_list)
-            # Formatowanie kolumn numerycznych
-            if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
-                schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].apply(
-                    lambda x: int(x) if pd.notna(x) and isinstance(x, numbers.Number) and x == x // 1 else (f"{x:.1f}" if pd.notna(x) and isinstance(x, numbers.Number) else (x if isinstance(x, str) else "-"))
-                )
-            
-            # Konwersja całej kolumny do stringów przed wyświetleniem, aby uniknąć ArrowTypeError w Streamlit.io
-            if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
-                schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].astype(str)
-            if "Ranking" in schools_summary_df.columns:
-                schools_summary_df["Ranking"] = schools_summary_df["Ranking"].astype(str)
+        if not df_filtered_classes.empty:
+            buf = io.BytesIO()
+            with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+                df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
+                if filter_entries:
+                    filters_df = pd.DataFrame(filter_entries, columns=["Filtr", "Wartość"])
+                    filters_df.to_excel(writer, index=False, sheet_name="Parametry")
+            buf.seek(0)
+            st.download_button(
+                label="📥 Pobierz dane klas (Excel)",
+                data=buf,
+                file_name="moje_klasy.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
 
-            st.dataframe(schools_summary_df, use_container_width=True)
+        if not df_schools_to_display.empty:
+            with st.expander("Pokaż listę pasujących szkół", expanded=False):
+                schools_summary_list = []
+                for _, school_row in df_schools_to_display.iterrows():
+                    szk_id = school_row["SzkolaIdentyfikator"]
+                    class_count = count_filtered_classes.get(szk_id, 0)
+
+                    min_threshold_from_filtered_classes = None
+                    if szk_id in school_summary_from_filtered and 'Prog_min_szkola' in school_summary_from_filtered[szk_id]:
+                        min_threshold_from_filtered_classes = school_summary_from_filtered[szk_id]['Prog_min_szkola']
+                    elif szk_id in detailed_filtered_classes_info:
+                        thresholds = [
+                            class_info.get("min_pkt_klasy")
+                            for class_info in detailed_filtered_classes_info[szk_id]
+                            if class_info.get("min_pkt_klasy") is not None
+                        ]
+                        if thresholds:
+                            min_threshold_from_filtered_classes = min(thresholds)
+
+                    display_ranking = school_row.get("RankingPoz", "-")
+                    if pd.notna(display_ranking) and display_ranking != "-":
+                        display_ranking = int(display_ranking) if display_ranking == display_ranking // 1 else display_ranking
+
+                    schools_summary_list.append({
+                        "Nazwa szkoły": school_row["NazwaSzkoly"],
+                        "Dzielnica": school_row["Dzielnica"],
+                        "Ranking": display_ranking,
+                        "Liczba pasujących klas": class_count,
+                        "Min. próg pkt. (z pasujących klas)": min_threshold_from_filtered_classes if pd.notna(min_threshold_from_filtered_classes) else "-",
+                    })
+
+                schools_summary_df = pd.DataFrame(schools_summary_list)
+                if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
+                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].apply(
+                        lambda x: int(x) if pd.notna(x) and isinstance(x, numbers.Number) and x == x // 1 else (f"{x:.1f}" if pd.notna(x) and isinstance(x, numbers.Number) else (x if isinstance(x, str) else "-"))
+                    )
+
+                if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
+                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].astype(str)
+                if "Ranking" in schools_summary_df.columns:
+                    schools_summary_df["Ranking"] = schools_summary_df["Ranking"].astype(str)
+
+                st.dataframe(schools_summary_df, use_container_width=True)
+
+    with tab_viz:
+        if show_histogram:
+            fig = plots.histogram_threshold_distribution(df_filtered_classes)
+            if fig:
+                st.pyplot(fig)
+
+        if show_bar_district:
+            fig = plots.bar_classes_per_district(df_filtered_classes, df_schools_to_display)
+            if fig:
+                st.pyplot(fig)
+
+        if show_scatter_rank:
+            fig = plots.scatter_rank_vs_threshold(df_schools_to_display)
+            if fig:
+                st.pyplot(fig)
 
 if __name__ == "__main__":
     main()

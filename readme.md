@@ -99,9 +99,13 @@ Posty o procesie tworzenia
     Mapa `mapa_licea_warszawa.html` zostanie zapisana w folderze `results/`.
 9.  Aby uruchomić interaktywną aplikację Streamlit z mapą i filtrami:
     ```powershell
-    streamlit run scripts/visualization/streamlit_mapa_licea.py
-    ```
-    Aplikacja uruchomi się lokalnie i otworzy w domyślnej przeglądarce, umożliwiając interaktywną filtrację liceów.
+streamlit run scripts/visualization/streamlit_mapa_licea.py
+```
+Aplikacja uruchomi się lokalnie i otworzy w domyślnej przeglądarce, umożliwiając interaktywną filtrację liceów.
+
+### Wizualizacje w aplikacji Streamlit
+
+Po zastosowaniu filtrów dostępna jest zakładka **Wizualizacje**, w której można obejrzeć wykresy generowane na podstawie aktualnie wybranych danych. W panelu bocznym można zaznaczyć, które z nich mają być wyświetlone.
 
 ## Główne funkcjonalności
 
