@@ -98,7 +98,7 @@ Posty o procesie tworzenia
     python scripts/visualization/generate_map.py
     ```
     Mapa `mapa_licea_warszawa.html` zostanie zapisana w folderze `results/`.
-9.  Aby uruchomić interaktywną aplikację Streamlit z mapą i filtrami:
+9.  Aby uruchomić interaktywną aplikację Streamlit z mapą i filtrami oraz wizualizacjami:
     ```powershell
     streamlit run scripts/visualization/streamlit_mapa_licea.py
     ```
