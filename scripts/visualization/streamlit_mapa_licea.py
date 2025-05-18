@@ -140,8 +140,8 @@ def main():
 
         st.subheader("Wykresy")
         show_histogram = st.checkbox("Rozkład progów punktowych", value=True)
-        show_bar_district = st.checkbox("Liczba klas w dzielnicach", value=False)
-        show_scatter_rank = st.checkbox("Ranking vs próg punktowy", value=False)
+        show_bar_district = st.checkbox("Liczba klas w dzielnicach", value=True)
+        show_scatter_rank = st.checkbox("Ranking vs próg punktowy", value=True)
 
     df_filtered_classes = apply_filters_to_classes(
         df_classes_raw,
