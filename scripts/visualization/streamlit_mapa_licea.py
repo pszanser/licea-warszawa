@@ -61,6 +61,14 @@ def create_schools_map_streamlit(
         HeatMap(heat_data, name="HeatMap").add_to(m)
     return m
 
+@st.cache_data
+def get_unique_school_names(df_schools):
+    """
+    Get sorted unique school names from the dataframe.
+    This function is cached by Streamlit to avoid recomputing on every rerun.
+    """
+    return sorted(df_schools["NazwaSzkoly"].unique())
+
 def main():
     st.title("🏫 Mapa szkół średnich - Warszawa i okolice (2025)")
     st.markdown("""
@@ -106,6 +114,13 @@ def main():
                 max_ranking_positions,
                 index=2
             )
+
+        st.subheader("Nazwa szkoły")
+        school_names = get_unique_school_names(df_schools_raw)
+        selected_school_names = st.multiselect(
+            "Wybierz szkoły do wyświetlenia:",
+            school_names,
+        )
         
         st.subheader("Filtr przedmiotów rozszerzonych")
         st.markdown("**Poszukiwane rozszerzenia** (klasa musi je mieć)")
@@ -163,6 +178,10 @@ def main():
         df_classes_by_type = df_classes_raw
         df_schools_by_type = df_schools_raw
 
+    if selected_school_names:
+        df_classes_by_type = df_classes_by_type[df_classes_by_type["NazwaSzkoly"].isin(selected_school_names)]
+        df_schools_by_type = df_schools_by_type[df_schools_by_type["NazwaSzkoly"].isin(selected_school_names)]
+
     df_filtered_classes = apply_filters_to_classes(
         df_classes_by_type,
         wanted_subjects=wanted_subjects_filter,
@@ -179,7 +198,8 @@ def main():
         max_ranking_poz_filter is not None,
         min_class_points_filter is not None,
         max_class_points_filter is not None,
-        len(selected_school_types) != len(school_type_options)
+        bool(selected_school_types),
+        bool(selected_school_names)
     ])
 
     if df_filtered_classes.empty and any_filters_active:
@@ -195,6 +215,8 @@ def main():
     filter_entries = []
     if selected_school_types:
         filter_entries.append(("Typ szkoły", ", ".join(selected_school_types)))
+    if selected_school_names:
+        filter_entries.append(("Wybrane szkoły", ", ".join(selected_school_names)))
     if wanted_subjects_filter:
         filter_entries.append(("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter)))
     if avoided_subjects_filter:
