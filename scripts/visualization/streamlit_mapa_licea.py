@@ -338,7 +338,7 @@ def main():
             fig = plots.heatmap_subject_cooccurrence(df_filtered_classes)
             if fig:
                 st.pyplot(fig)
-                st.caption("Ciepło oznacza częste łączenie dwóch rozszerzeń w jednej klasie.")
+                st.caption("Im intensywniejszy kolor, tym częściej dane przedmioty występują razem.")
 
         if show_bubble_commute:
             fig = plots.bubble_prog_vs_dojazd(df_schools_to_display)
