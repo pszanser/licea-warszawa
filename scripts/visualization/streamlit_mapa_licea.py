@@ -315,28 +315,31 @@ def main():
                         if thresholds:
                             min_threshold_from_filtered_classes = min(thresholds)
 
-                    display_ranking = school_row.get("RankingPoz", "-")
-                    if pd.notna(display_ranking) and display_ranking != "-":
-                        display_ranking = int(display_ranking) if display_ranking == display_ranking // 1 else display_ranking
+                    display_ranking = school_row.get("RankingPoz")
+                    if pd.notna(display_ranking):
+                        display_ranking = int(display_ranking) if display_ranking == display_ranking // 1 else float(display_ranking)
+                    else:
+                        display_ranking = None
 
                     schools_summary_list.append({
                         "Nazwa szkoły": school_row["NazwaSzkoly"],
                         "Dzielnica": school_row["Dzielnica"],
                         "Ranking": display_ranking,
                         "Liczba pasujących klas": class_count,
-                        "Min. próg pkt. (z pasujących klas)": min_threshold_from_filtered_classes if pd.notna(min_threshold_from_filtered_classes) else "-",
+                        "Min. próg pkt. (z pasujących klas)": min_threshold_from_filtered_classes if pd.notna(min_threshold_from_filtered_classes) else None,
                     })
 
                 schools_summary_df = pd.DataFrame(schools_summary_list)
-                if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
-                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].apply(
-                        lambda x: int(x) if pd.notna(x) and isinstance(x, numbers.Number) and x == x // 1 else (f"{x:.1f}" if pd.notna(x) and isinstance(x, numbers.Number) else (x if isinstance(x, str) else "-"))
-                    )
 
                 if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
-                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = schools_summary_df["Min. próg pkt. (z pasujących klas)"].astype(str)
+                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = pd.to_numeric(
+                        schools_summary_df["Min. próg pkt. (z pasujących klas)"], errors="coerce"
+                    )
+
                 if "Ranking" in schools_summary_df.columns:
-                    schools_summary_df["Ranking"] = schools_summary_df["Ranking"].astype(str)
+                    schools_summary_df["Ranking"] = pd.to_numeric(
+                        schools_summary_df["Ranking"], errors="coerce"
+                    )
 
                 st.dataframe(schools_summary_df, use_container_width=True)
 
