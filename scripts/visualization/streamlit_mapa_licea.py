@@ -1,6 +1,5 @@
 import streamlit as st
 
-# Ustawienie konfiguracji strony musi być pierwszym poleceniem Streamlit
 st.set_page_config(
     page_title="Mapa szkół średnich - Warszawa i okolice (2025)",
     page_icon="🏫",
@@ -136,8 +135,7 @@ def main():
             )
 
         st.subheader("Nazwa szkoły")
-        # Lista nazw szkół zależy od wybranych typów. Jeśli nie wybrano typu,
-        # pokazujemy wszystkie dostępne szkoły.
+        # Lista nazw szkół zależy od wybranych typów
         if selected_school_types:
             df_for_names = df_schools_raw[df_schools_raw["TypSzkoly"].isin(selected_school_types)]
         else:
