@@ -8,7 +8,23 @@ from scripts.api_clients.googlemaps_api import (
 )
 from unittest.mock import Mock
 import datetime
-from freezegun import freeze_time
+
+
+def _freeze_time(monkeypatch, ts: str) -> None:
+    dt = datetime.datetime.fromisoformat(ts)
+
+    class FrozenDate(datetime.date):
+        @classmethod
+        def today(cls):
+            return dt.date()
+
+    class FrozenDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt if tz is None else dt.astimezone(tz)
+
+    monkeypatch.setattr(datetime, "date", FrozenDate)
+    monkeypatch.setattr(datetime, "datetime", FrozenDateTime)
 
 def test_get_travel_time(monkeypatch):
     # Przygotowanie mockowanego obiektu gmaps
@@ -273,8 +289,8 @@ def test_get_coordinates_for_addresses_batch_exception(monkeypatch):
     }
     assert coordinates == expected_coordinates
 
-@freeze_time("2025-05-17")  # Sobota
 def test_get_next_weekday_time_weekend(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-17")  # Sobota
     # Funkcja powinna zwrócić timestamp dla poniedziałku (19.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 19, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
@@ -285,8 +301,8 @@ def test_get_next_weekday_time_weekend(monkeypatch):
     # Sprawdzenie wyników
     assert result_timestamp == expected_timestamp
 
-@freeze_time("2025-05-19 06:30:00")  # Poniedziałek, przed 7:30
 def test_get_next_weekday_time_weekday_before_hour(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-19 06:30:00")  # Poniedziałek, przed 7:30
     # Funkcja powinna zwrócić timestamp dla tego samego dnia (19.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 19, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
@@ -297,8 +313,8 @@ def test_get_next_weekday_time_weekday_before_hour(monkeypatch):
     # Sprawdzenie wyników
     assert result_timestamp == expected_timestamp
 
-@freeze_time("2025-05-19 08:00:00")  # Poniedziałek, po 7:30
 def test_get_next_weekday_time_weekday_after_hour(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-19 08:00:00")  # Poniedziałek, po 7:30
     # Funkcja powinna zwrócić timestamp dla następnego dnia (20.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 20, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
@@ -309,8 +325,8 @@ def test_get_next_weekday_time_weekday_after_hour(monkeypatch):
     # Sprawdzenie wyników
     assert result_timestamp == expected_timestamp
 
-@freeze_time("2025-05-23 08:00:00")  # Piątek, po 7:30
 def test_get_next_weekday_time_friday_after_hour(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-23 08:00:00")  # Piątek, po 7:30
     # Funkcja powinna zwrócić timestamp dla poniedziałku (26.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 26, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
