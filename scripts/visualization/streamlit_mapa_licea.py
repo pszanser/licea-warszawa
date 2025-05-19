@@ -23,10 +23,16 @@ if str(scripts_dir) not in sys.path:
 
 # Import funkcji z generate_map.py
 from visualization.generate_map import (
-    RESULTS_DIR, DATA_PATTERN, WARSAW_CENTER_COORDS,
-    get_latest_xls_file, load_school_data, load_classes_data,
-    get_subjects_from_dataframe, apply_filters_to_classes,
-    aggregate_filtered_class_data, add_school_markers_to_map
+    RESULTS_DIR,
+    DATA_PATTERN,
+    WARSAW_CENTER_COORDS,
+    get_latest_xls_file,
+    load_school_data,
+    load_classes_data,
+    get_subjects_from_dataframe,
+    apply_filters_to_classes,
+    aggregate_filtered_class_data,
+    add_school_markers_to_map,
 )
 from visualization import plots
 
@@ -69,6 +75,19 @@ def get_unique_school_names(df_schools):
     """
     return sorted(df_schools["NazwaSzkoly"].unique())
 
+
+@st.cache_data
+def load_all_data(excel_file: Path) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """Wczytuje dane szkół i klas z pliku Excel tylko raz.
+
+    Użycie dekoratora ``st.cache_data`` sprawia, że podczas kolejnych
+    uruchomień skryptu Streamlit ponowne wczytywanie pliku z dysku nie
+    będzie konieczne, dopóki ścieżka ``excel_file`` się nie zmieni.
+    """
+    df_schools = load_school_data(excel_file)
+    df_classes = load_classes_data(excel_file)
+    return df_schools, df_classes
+
 def main():
     st.title("🏫 Mapa szkół średnich - Warszawa i okolice (2025)")
     st.markdown("""
@@ -80,8 +99,8 @@ def main():
         st.error("Nie można wygenerować mapy bez pliku danych.")
         return
 
-    df_schools_raw = load_school_data(latest_excel_file)
-    df_classes_raw = load_classes_data(latest_excel_file)
+    # Dane wczytujemy tylko raz dzięki cache'u Streamlit.
+    df_schools_raw, df_classes_raw = load_all_data(latest_excel_file)
 
     if df_schools_raw is None or df_classes_raw is None:
         st.error("Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana.")
@@ -116,7 +135,14 @@ def main():
             )
 
         st.subheader("Nazwa szkoły")
-        school_names = get_unique_school_names(df_schools_raw)
+        # Lista nazw szkół zależy od wybranych typów. Jeśli nie wybrano typu,
+        # pokazujemy wszystkie dostępne szkoły.
+        if selected_school_types:
+            df_for_names = df_schools_raw[df_schools_raw["TypSzkoly"].isin(selected_school_types)]
+        else:
+            df_for_names = df_schools_raw
+
+        school_names = get_unique_school_names(df_for_names)
         selected_school_names = st.multiselect(
             "Wybierz szkoły do wyświetlenia:",
             school_names,
