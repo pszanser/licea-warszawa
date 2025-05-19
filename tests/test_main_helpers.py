@@ -1,9 +1,25 @@
 import pytest
 import datetime
 import unicodedata
-from freezegun import freeze_time
 from scripts.main import normalize_name, get_school_type
 from scripts.api_clients.googlemaps_api import get_next_weekday_time
+
+
+def _freeze_time(monkeypatch, ts: str) -> None:
+    dt = datetime.datetime.fromisoformat(ts)
+
+    class FrozenDate(datetime.date):
+        @classmethod
+        def today(cls):
+            return dt.date()
+
+    class FrozenDateTime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt if tz is None else dt.astimezone(tz)
+
+    monkeypatch.setattr(datetime, "date", FrozenDate)
+    monkeypatch.setattr(datetime, "datetime", FrozenDateTime)
 
 def test_normalize_name():
     # Test przypadku z NaN
@@ -48,8 +64,8 @@ def test_get_school_type():
     # Test przypadku mieszanego (priorytet dla technikum)
     assert get_school_type("Zespół Szkół Liceum i Technikum") == "technikum"
 
-@freeze_time("2025-05-19 06:30:00")  # Poniedziałek o 6:30
-def test_get_next_weekday_time_same_day():
+def test_get_next_weekday_time_same_day(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-19 06:30:00")  # Poniedziałek o 6:30
     # Gdy wywołujemy przed 7:30 w dzień powszedni, powinien zwrócić ten sam dzień
     timestamp = get_next_weekday_time(7, 30)
     dt = datetime.datetime.fromtimestamp(timestamp)
@@ -57,8 +73,8 @@ def test_get_next_weekday_time_same_day():
     assert dt.hour == 7
     assert dt.minute == 30
 
-@freeze_time("2025-05-19 08:00:00")  # Poniedziałek o 8:00
-def test_get_next_weekday_time_next_day():
+def test_get_next_weekday_time_next_day(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-19 08:00:00")  # Poniedziałek o 8:00
     # Gdy wywołujemy po 7:30 w dzień powszedni, powinien zwrócić następny dzień
     timestamp = get_next_weekday_time(7, 30)
     dt = datetime.datetime.fromtimestamp(timestamp)
@@ -66,8 +82,8 @@ def test_get_next_weekday_time_next_day():
     assert dt.hour == 7
     assert dt.minute == 30
 
-@freeze_time("2025-05-23 08:00:00")  # Piątek o 8:00
-def test_get_next_weekday_time_skip_weekend():
+def test_get_next_weekday_time_skip_weekend(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-23 08:00:00")  # Piątek o 8:00
     # Gdy wywołujemy w piątek po 7:30, powinien zwrócić poniedziałek
     timestamp = get_next_weekday_time(7, 30)
     dt = datetime.datetime.fromtimestamp(timestamp)
@@ -76,8 +92,8 @@ def test_get_next_weekday_time_skip_weekend():
     assert dt.hour == 7
     assert dt.minute == 30
 
-@freeze_time("2025-05-17")  # Sobota
-def test_get_next_weekday_time_weekend():
+def test_get_next_weekday_time_weekend(monkeypatch):
+    _freeze_time(monkeypatch, "2025-05-17")  # Sobota
     # Gdy wywołujemy w weekend, powinien zwrócić najbliższy poniedziałek
     timestamp = get_next_weekday_time(7, 30)
     dt = datetime.datetime.fromtimestamp(timestamp)
