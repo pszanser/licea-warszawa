@@ -141,6 +141,10 @@ def main():
         else:
             df_for_names = df_schools_raw
 
+        # Dodatkowe ograniczenie listy nazw na podstawie rankingu (TOP)
+        if max_ranking_poz_filter is not None and "RankingPoz" in df_for_names.columns:
+            df_for_names = df_for_names[df_for_names["RankingPoz"] <= max_ranking_poz_filter]
+
         school_names = get_unique_school_names(df_for_names)
         selected_school_names = st.multiselect(
             "Wybierz szkoły do wyświetlenia:",
