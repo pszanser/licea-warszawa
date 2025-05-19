@@ -15,42 +15,107 @@ from scripts.visualization.plots import (
     heatmap_rank_commute,
 )
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_get_top_n():
-    pass
+    # series with values a:3, b:2, c:1
+    s = pd.Series(['a', 'b', 'a', 'c', 'b', 'a'])
+    top2 = get_top_n(s, 2)
+    assert top2 == ['a', 'b']
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_get_top_subjects():
-    pass
+    # only matematyka and fizyka in columns
+    df = pd.DataFrame({
+        'matematyka': [1, 0, 1],
+        'fizyka': [0, 1, 1],
+        'inne': [1, 1, 1]
+    })
+    top2 = get_top_subjects(df, 2)
+    # sums: matematyka=2, fizyka=2, order follows SUBJECTS
+    assert top2 == ['matematyka', 'fizyka']
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_merge_with_district():
-    pass
+    df_kl = pd.DataFrame({
+        'SzkolaIdentyfikator': [1, 2],
+        'Val': [10, 20]
+    })
+    df_szkoly = pd.DataFrame({
+        'SzkolaIdentyfikator': [1],
+        'Dzielnica': ['A']
+    })
+    # merge adds Dzielnica, missing maps to NaN
+    res = merge_with_district(df_kl, df_szkoly)
+    assert 'Dzielnica' in res.columns
+    assert res.loc[res['SzkolaIdentyfikator'] == 1, 'Dzielnica'].iloc[0] == 'A'
+    assert pd.isna(res.loc[res['SzkolaIdentyfikator'] == 2, 'Dzielnica'].iloc[0])
+    # if Dzielnica already present, copy unchanged
+    df_kl2 = df_kl.copy()
+    df_kl2['Dzielnica'] = ['X', 'Y']
+    res2 = merge_with_district(df_kl2, df_szkoly)
+    pd.testing.assert_frame_equal(res2, df_kl2)
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_plot_heatmap_with_annotations():
-    pass
+    # simple 2x2 matrix
+    mat = np.array([[1, 2], [3, 4]])
+    x = ['x1', 'x2']
+    y = ['y1', 'y2']
+    fig = plot_heatmap_with_annotations(mat, x, y, 'T', 'X', 'Y')
+    assert isinstance(fig, plt.Figure)
+    ax = fig.axes[0]
+    assert ax.get_title() == 'T'
+    # check that tick labels match input
+    assert [t.get_text() for t in ax.get_xticklabels()] == x
+    assert [t.get_text() for t in ax.get_yticklabels()] == y
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_heat_pairs():
-    pass
+    # create binary subject DataFrame
+    df = pd.DataFrame({
+        'matematyka': [1, 1, 0],
+        'fizyka': [1, 0, 1]
+    })
+    fig = heat_pairs(df, 'TAG', top_n_subj=2)
+    assert isinstance(fig, plt.Figure)
+    ax = fig.axes[0]
+    assert 'TAG: duety rozszerzeń' in ax.get_title()
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_lollipop_diff_top30():
-    pass
+    # create Profil and RankingPoz
+    df = pd.DataFrame({
+        'Profil': ['A', 'B', 'A', 'C'],
+        'RankingPoz': [1, 40, 10, 20]
+    })
+    fig = lollipop_diff_top30(df)
+    assert isinstance(fig, plt.Figure)
+    ax = fig.axes[0]
+    assert 'Które profile' in ax.get_title()
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_heatmap_profiles_by_district():
-    pass
+    # no data returns None
+    assert heatmap_profiles_by_district(None, None) is None
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_heatmap_subjects_by_district():
-    pass
+    # no data returns None
+    assert heatmap_subjects_by_district(None, None) is None
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_bubble_prog_vs_dojazd():
-    pass
+    # minimal DataFrame with required cols
+    df = pd.DataFrame({
+        'CzasDojazdu': [10, 20, 30],
+        'Prog_min_szkola': [100, 200, 150],
+        'RankingPoz': [1, 2, 3],
+        'Dzielnica': ['X', 'Y', 'Z']
+    })
+    fig = bubble_prog_vs_dojazd(df)
+    assert isinstance(fig, plt.Figure)
+    ax = fig.axes[0]
+    assert ax.get_xlabel() == 'Czas dojazdu [min]'
 
-@pytest.mark.skip(reason="TODO: implement")
 def test_heatmap_rank_commute():
-    pass
+    # minimal DataFrame with required cols
+    df = pd.DataFrame({
+        'CzasDojazdu': [5, 25, 45],
+        'RankingPoz': [5, 15, 35]
+    })
+    fig = heatmap_rank_commute(df)
+    assert isinstance(fig, plt.Figure)
+    ax = fig.axes[0]
+    # check labels
+    assert ax.get_xlabel() == 'Czas dojazdu [min]'
