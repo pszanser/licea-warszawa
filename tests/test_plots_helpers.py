@@ -23,6 +23,9 @@ def test_get_top_n():
 
 def test_get_top_subjects():
     # only matematyka and fizyka in columns
+    """
+    Testuje funkcję get_top_subjects, sprawdzając czy zwraca poprawnie dwa najczęściej występujące przedmioty na podstawie sum kolumn w DataFrame.
+    """
     df = pd.DataFrame({
         'matematyka': [1, 0, 1],
         'fizyka': [0, 1, 1],
@@ -67,6 +70,11 @@ def test_plot_heatmap_with_annotations():
 
 def test_heat_pairs():
     # create binary subject DataFrame
+    """
+    Testuje funkcję heat_pairs, sprawdzając czy zwraca wykres par rozszerzonych przedmiotów.
+    
+    Tworzy binarną ramkę danych z przedmiotami, wywołuje funkcję heat_pairs i weryfikuje, że zwrócony obiekt to Figure z odpowiednim tytułem wykresu.
+    """
     df = pd.DataFrame({
         'matematyka': [1, 1, 0],
         'fizyka': [1, 0, 1]
@@ -78,6 +86,9 @@ def test_heat_pairs():
 
 def test_lollipop_diff_top30():
     # create Profil and RankingPoz
+    """
+    Testuje funkcję lollipop_diff_top30, sprawdzając czy zwraca obiekt Figure z odpowiednim tytułem wykresu dla danych o profilach i pozycjach rankingowych.
+    """
     df = pd.DataFrame({
         'Profil': ['A', 'B', 'A', 'C'],
         'RankingPoz': [1, 40, 10, 20]
@@ -93,10 +104,16 @@ def test_heatmap_profiles_by_district():
 
 def test_heatmap_subjects_by_district():
     # no data returns None
+    """
+    Testuje, czy funkcja heatmap_subjects_by_district zwraca None przy braku danych wejściowych.
+    """
     assert heatmap_subjects_by_district(None, None) is None
 
 def test_bubble_prog_vs_dojazd():
     # minimal DataFrame with required cols
+    """
+    Testuje funkcję bubble_prog_vs_dojazd, sprawdzając czy zwraca obiekt Figure z odpowiednią etykietą osi X dla czasu dojazdu.
+    """
     df = pd.DataFrame({
         'CzasDojazdu': [10, 20, 30],
         'Prog_min_szkola': [100, 200, 150],
@@ -110,6 +127,11 @@ def test_bubble_prog_vs_dojazd():
 
 def test_heatmap_rank_commute():
     # minimal DataFrame with required cols
+    """
+    Testuje funkcję heatmap_rank_commute, sprawdzając poprawność generowanego wykresu.
+    
+    Tworzy minimalny DataFrame z kolumnami 'CzasDojazdu' i 'RankingPoz', wywołuje funkcję heatmap_rank_commute i weryfikuje, czy zwracany obiekt to instancja matplotlib Figure oraz czy etykieta osi X jest ustawiona prawidłowo.
+    """
     df = pd.DataFrame({
         'CzasDojazdu': [5, 25, 45],
         'RankingPoz': [5, 15, 35]

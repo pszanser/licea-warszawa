@@ -94,6 +94,11 @@ def get_school_type(name):
             return "liceum"
 
 def wczytaj_dane_vulcan():
+    """
+    Wczytuje dane szkół z systemu Vulcan, pobierając je asynchronicznie lub wczytując z pliku cache.
+    
+    Jeśli plik z danymi nie istnieje, pobiera dane asynchronicznie i zapisuje je do pliku Excel; w przeciwnym razie wczytuje dane z istniejącego pliku. Zwraca DataFrame z danymi szkół.
+    """
     t0 = time.perf_counter()
     if not VULCAN_FILE.exists():
         logger.info(f"Pobieranie danych z Vulcan (async)...")

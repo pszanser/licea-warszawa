@@ -21,6 +21,11 @@ def test__compute_min_prog_value():
     assert result.iloc[0] == 140
 
 def test_add_metrics_columns():
+    """
+    Testuje, czy funkcja add_metrics dodaje oczekiwane kolumny metryk do DataFrame.
+    
+    Sprawdza, czy wynikowy DataFrame zawiera kolumny: "Quality", "AdmitProb", "CommuteScore", "ProfileMatch", "MinProg" oraz "AdmitMargin".
+    """
     df = pd.DataFrame({
         "RankingPoz": [1],
         "CzasDojazdu": [20],
@@ -51,6 +56,9 @@ def test_add_metrics_profile_match():
     assert out["ProfileMatch"].tolist() == [1, 0]
 
 def test_compute_composite_default_weights():
+    """
+    Testuje, czy funkcja compute_composite poprawnie dodaje kolumnę 'Composite' i czy wyniki są posortowane zgodnie z domyślnymi wagami metryk.
+    """
     df = pd.DataFrame({
         "RankingPoz": [1, 2],
         "CzasDojazdu": [10, 20],
@@ -64,6 +72,9 @@ def test_compute_composite_default_weights():
     assert result.iloc[0]["Composite"] >= result.iloc[1]["Composite"]
 
 def test_compute_composite_custom_weights():
+    """
+    Testuje funkcję compute_composite z niestandardowymi wagami, sprawdzając czy metryka ProfileMatch jest prawidłowo uwzględniana przy obliczaniu wyniku złożonego.
+    """
     df = pd.DataFrame({
         "RankingPoz": [1, 2],
         "CzasDojazdu": [10, 20],
@@ -82,6 +93,11 @@ def test_compute_composite_missing_columns():
         compute_composite(df)
 
 def test_compute_composite_sorting():
+    """
+    Testuje, czy funkcja compute_composite zwraca DataFrame posortowany malejąco według wyniku złożonego.
+    
+    Sprawdza, czy indeksy w wyniku odpowiadają kolejności posortowanych wartości Composite.
+    """
     df = pd.DataFrame({
         "RankingPoz": [2, 1],
         "CzasDojazdu": [20, 10],
