@@ -101,7 +101,8 @@ def main():
         school_type_options = ["liceum", "technikum", "branżowa"]
         selected_school_types = st.multiselect(
             "Wybierz typ szkoły:",
-            school_type_options
+            school_type_options,
+            placeholder="Wybierz..."
         )
 
         st.subheader("Ranking Perspektyw 2025")
@@ -120,6 +121,7 @@ def main():
         selected_school_names = st.multiselect(
             "Wybierz szkoły do wyświetlenia:",
             school_names,
+            placeholder="Wybierz..."
         )
         
         st.subheader("Filtr przedmiotów rozszerzonych")
@@ -127,14 +129,16 @@ def main():
         wanted_subjects_filter = st.multiselect(
             "Wybierz poszukiwane przedmioty:",
             available_subjects,
-            default=[]
+            default=[],
+            placeholder="Wybierz..."
         )
         
         st.markdown("**Unikane rozszerzenia** (klasa nie może ich mieć)")
         avoided_subjects_filter = st.multiselect(
             "Wybierz unikane przedmioty:",
             available_subjects,
-            default=[]
+            default=[],
+            placeholder="Wybierz..."
         )
         
         st.subheader("Progi punktowe szkoły")
