@@ -14,6 +14,11 @@ def test_load_min_points(monkeypatch):
     
     # Mockowanie funkcji pd.read_excel
     def mock_read_excel(*args, **kwargs):
+        """
+        Symuluje funkcję pandas.read_excel dla testów, zwracając przygotowany DataFrame.
+        
+        Funkcja sprawdza, czy ścieżka pliku to "test_path.xlsx" oraz czy nagłówek ustawiony jest na 2, po czym zwraca wcześniej zdefiniowany obiekt mock_excel_data.
+        """
         assert args[0] == "test_path.xlsx"
         assert kwargs.get("header") == 2
         return mock_excel_data

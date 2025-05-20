@@ -7,6 +7,11 @@ from scripts.data_processing.parser_perspektywy import (
 
 
 def test_parse_ranking_perspektywy_html(tmp_path):
+    """
+    Testuje funkcję parsującą ranking szkół z pliku HTML.
+    
+    Tworzy tymczasowy plik HTML z przykładową tabelą rankingową, uruchamia parser i sprawdza, czy wynikowy DataFrame zawiera oczekiwane kolumny, kształt oraz poprawne dane.
+    """
     html = """
     <html><body><table>
     <tr><th>Poz</th><th>Nazwa</th><th>Dzielnica</th><th>h</th><th>x</th><th>Wsk</th></tr>
@@ -25,6 +30,11 @@ def test_parse_ranking_perspektywy_html(tmp_path):
 
 
 def test_parse_ranking_perspektywy_pdf(monkeypatch):
+    """
+    Testuje funkcję parse_ranking_perspektywy_pdf pod kątem poprawnego przetwarzania tabeli rankingowej z pliku PDF.
+    
+    Tworzy sztuczny obiekt PDF z jedną stroną zawierającą przykładową tabelę rankingową, zastępuje funkcję otwierającą pliki PDF za pomocą monkeypatch, a następnie sprawdza, czy parser zwraca DataFrame o oczekiwanych kolumnach, kształcie i zawartości.
+    """
     table = [
         ["Poz", "Nazwa", "Dzielnica"],
         ["1", "LO im. A", "Mokotów"],
@@ -33,10 +43,19 @@ def test_parse_ranking_perspektywy_pdf(monkeypatch):
 
     class FakePage:
         def extract_table(self):
+            """
+            Zwraca tabelę przechowywaną w obiekcie.
+            
+            Returns:
+                Tabela przypisana do obiektu.
+            """
             return table
 
     class FakePDF:
         def __init__(self):
+            """
+            Inicjalizuje obiekt z jedną stroną testową typu FakePage.
+            """
             self.pages = [FakePage()]
         def __enter__(self):
             return self
@@ -44,6 +63,11 @@ def test_parse_ranking_perspektywy_pdf(monkeypatch):
             pass
 
     def fake_open(path):
+        """
+        Zwraca instancję klasy FakePDF niezależnie od podanej ścieżki pliku.
+        
+        Funkcja służy do zastępowania otwierania plików PDF w testach, umożliwiając użycie sztucznego obiektu PDF zamiast rzeczywistego pliku.
+        """
         return FakePDF()
 
     monkeypatch.setattr("pdfplumber.open", fake_open)

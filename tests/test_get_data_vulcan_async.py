@@ -10,7 +10,11 @@ from tests.fixtures.sample_school_html import (
 from tests.fixtures.real_school_html import REAL_SCHOOL_HTML
 
 def test_parse_school_html_valid_case():
-    """Test poprawnego przetwarzania HTML-a z ofertą szkoły i grupami rekrutacyjnymi."""
+    """
+    Testuje poprawność parsowania HTML-a z ofertą szkoły zawierającą grupy rekrutacyjne.
+    
+    Funkcja sprawdza, czy parse_school_html zwraca poprawnie sformatowaną listę grup rekrutacyjnych na podstawie przykładowego HTML-a, weryfikując liczbę grup oraz szczegółowe dane każdej z nich, takie jak ID szkoły, nazwa, adres, nazwa oddziału, przedmioty rozszerzone, języki obce, liczba miejsc i poprawność linku do grupy.
+    """
     school_id = 123
     results = parse_school_html(VALID_SCHOOL_HTML, school_id)
     
@@ -43,7 +47,11 @@ def test_parse_school_html_valid_case():
     assert "groupId=457" in results[1][7]  # URL grupy zawiera poprawne ID
 
 def test_parse_school_html_error_page():
-    """Test przetwarzania HTML-a z błędem wewnętrznym aplikacji."""
+    """
+    Testuje, czy funkcja zwraca pustą listę dla HTML-a z błędem wewnętrznym aplikacji.
+    
+    Sprawdza, że w przypadku wykrycia strony błędu funkcja `parse_school_html` nie zwraca żadnych wyników.
+    """
     school_id = 456
     results = parse_school_html(ERROR_SCHOOL_HTML, school_id)
     
@@ -51,7 +59,11 @@ def test_parse_school_html_error_page():
     assert results == []
 
 def test_parse_school_html_no_groups():
-    """Test przetwarzania HTML-a bez tabeli grup rekrutacyjnych."""
+    """
+    Testuje, czy funkcja zwraca pustą listę dla HTML-a bez nagłówka grup rekrutacyjnych.
+    
+    Sprawdza przypadek, gdy w HTML-u brakuje sekcji "Lista grup rekrutacyjnych/oddziałów", co powinno skutkować brakiem wyników po przetwarzaniu.
+    """
     school_id = 789
     results = parse_school_html(NO_GROUPS_SCHOOL_HTML, school_id)
     
@@ -59,7 +71,11 @@ def test_parse_school_html_no_groups():
     assert results == []
 
 def test_parse_school_html_header_no_table():
-    """Test przetwarzania HTML-a z nagłówkiem grupy rekrutacyjnej, ale bez tabeli."""
+    """
+    Testuje przypadek, gdy HTML zawiera nagłówek grupy rekrutacyjnej, ale brak jest odpowiadającej mu tabeli.
+    
+    Sprawdza, czy funkcja `parse_school_html` zwraca pustą listę, gdy tabela z grupami rekrutacyjnymi nie występuje mimo obecności nagłówka.
+    """
     school_id = 101
     results = parse_school_html(HEADER_NO_TABLE_HTML, school_id)
     
@@ -78,7 +94,11 @@ def test_parse_school_html_incomplete_data():
     assert results == []
 
 def test_parse_real_school_html():
-    """Test przetwarzania rzeczywistego HTML-a ze strony szkoły Vulcan."""
+    """
+    Testuje poprawność parsowania rzeczywistego HTML-a szkoły Vulcan przez funkcję parse_school_html.
+    
+    Sprawdza, czy funkcja poprawnie wyodrębnia dane o szkole i dwóch grupach rekrutacyjnych, w tym nazwę szkoły, adres, nazwy oddziałów, przedmioty rozszerzone, języki obce, liczbę miejsc oraz identyfikatory grup w URL-ach.
+    """
     school_id = 999
     results = parse_school_html(REAL_SCHOOL_HTML, school_id)
     

@@ -5,7 +5,12 @@ from scripts.data_processing.get_data_kod_dzielnica import _rows_from_page, buil
 
 @pytest.fixture
 def mock_html_response():
-    """Zwraca przykładową odpowiedź HTML do testowania."""
+    """
+    Zwraca przykładowy fragment HTML zawierający tabelę z kodami pocztowymi i dzielnicami.
+    
+    Funkcja służy jako dane testowe do symulowania odpowiedzi serwera podczas testowania
+    parsowania tabeli kodów pocztowych i dzielnic Warszawy.
+    """
     return """
     <html>
         <body>
@@ -58,7 +63,13 @@ def test_rows_from_page(mock_html_response):
         assert result == expected
 
 def test_build_csv(tmp_path, monkeypatch):
-    """Test funkcji build_csv tworzącej plik CSV."""
+    """
+    Testuje funkcję build_csv pod kątem agregacji danych z wielu stron, usuwania duplikatów,
+    sortowania oraz poprawnego zapisu do pliku CSV.
+    
+    Test sprawdza, czy plik CSV jest tworzony, zawiera oczekiwaną liczbę wierszy i kolumn,
+    dane są posortowane według kodów pocztowych, a duplikaty zostały usunięte.
+    """
     # Przykładowe dane do zwrócenia przez _rows_from_page dla różnych stron
     page_data = {
         1: [('00-001', 'Śródmieście'), ('00-002', 'Mokotów')],
@@ -68,6 +79,15 @@ def test_build_csv(tmp_path, monkeypatch):
     
     # Mockowanie funkcji _rows_from_page
     def mock_rows_from_page(page):
+        """
+        Zwraca dane wierszy dla podanej strony na podstawie zdefiniowanego słownika testowego.
+        
+        Args:
+        	page: Numer strony, dla której mają zostać zwrócone dane.
+        
+        Returns:
+        	Lista krotek z danymi odpowiadającymi podanej stronie lub pusta lista, jeśli brak danych.
+        """
         return page_data.get(page, [])
     
     monkeypatch.setattr('scripts.data_processing.get_data_kod_dzielnica._rows_from_page', mock_rows_from_page)

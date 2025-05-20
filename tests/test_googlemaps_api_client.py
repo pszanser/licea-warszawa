@@ -11,16 +11,33 @@ import datetime
 
 
 def _freeze_time(monkeypatch, ts: str) -> None:
+    """
+    Zamraża bieżący czas na określony moment podczas testów.
+    
+    Ustawia metody `datetime.date.today()` i `datetime.datetime.now()` tak, aby zawsze zwracały datę i czas określone w parametrze `ts` (w formacie ISO), umożliwiając deterministyczne testowanie funkcji zależnych od aktualnej daty i czasu.
+    """
     dt = datetime.datetime.fromisoformat(ts)
 
     class FrozenDate(datetime.date):
         @classmethod
         def today(cls):
+            """
+            Zwraca bieżącą datę jako obiekt `date`.
+            """
             return dt.date()
 
     class FrozenDateTime(datetime.datetime):
         @classmethod
         def now(cls, tz=None):
+            """
+            Zwraca zamrożony czas jako obiekt datetime, opcjonalnie w podanej strefie czasowej.
+            
+            Args:
+            	tz: Opcjonalna strefa czasowa. Jeśli podana, czas zostanie przekonwertowany do tej strefy.
+            
+            Returns:
+            	Obiekt datetime reprezentujący zamrożony czas, w odpowiedniej strefie czasowej.
+            """
             return dt if tz is None else dt.astimezone(tz)
 
     monkeypatch.setattr(datetime, "date", FrozenDate)
@@ -61,6 +78,11 @@ def test_get_travel_time(monkeypatch):
 
 def test_get_travel_time_with_departure_time(monkeypatch):
     # Przygotowanie mockowanego obiektu gmaps
+    """
+    Testuje funkcję get_travel_time z parametrem departure_time.
+    
+    Sprawdza, czy funkcja poprawnie przekazuje departure_time do wywołania API Google Maps oraz czy zwraca prawidłowy czas przejazdu w minutach na podstawie mockowanej odpowiedzi.
+    """
     mock_gmaps = Mock()
     mock_result = {
         "rows": [
@@ -113,6 +135,11 @@ def test_get_travel_time_exception(monkeypatch):
 
 def test_get_travel_times_batch(monkeypatch):
     # Przygotowanie mockowanego obiektu gmaps
+    """
+    Testuje funkcję batchowego pobierania czasów podróży dla wielu miejsc docelowych.
+    
+    Sprawdza, czy funkcja `get_travel_times_batch` poprawnie zwraca słownik z czasami podróży w minutach dla każdego miejsca docelowego lub `None`, gdy trasa nie jest dostępna. Weryfikuje także, czy wywołanie API Google Maps odbywa się z odpowiednimi parametrami.
+    """
     mock_gmaps = Mock()
     mock_result = {
         "rows": [
@@ -157,6 +184,11 @@ def test_get_travel_times_batch(monkeypatch):
 
 def test_get_travel_times_batch_with_departure_time(monkeypatch):
     # Przygotowanie mockowanego obiektu gmaps
+    """
+    Testuje funkcję get_travel_times_batch z parametrem departure_time.
+    
+    Sprawdza, czy funkcja poprawnie zwraca czasy przejazdu w minutach dla wielu miejsc docelowych, przekazując departure_time do wywołania API Google Maps oraz czy wyniki są zgodne z oczekiwaniami.
+    """
     mock_gmaps = Mock()
     mock_result = {
         "rows": [
@@ -204,6 +236,10 @@ def test_get_travel_times_batch_with_departure_time(monkeypatch):
 
 def test_get_travel_times_batch_exception(monkeypatch):
     # Przygotowanie mockowanego obiektu gmaps, który zgłasza wyjątek
+    """
+    Testuje, czy get_travel_times_batch zwraca None dla wszystkich adresów docelowych,
+    gdy wywołanie API zgłasza wyjątek.
+    """
     mock_gmaps = Mock()
     mock_gmaps.distance_matrix.side_effect = Exception("API Error")
     
@@ -222,6 +258,11 @@ def test_get_travel_times_batch_exception(monkeypatch):
 
 def test_get_coordinates_for_addresses_batch(monkeypatch):
     # Przygotowanie mockowanego obiektu gmaps
+    """
+    Testuje funkcję batchowego pobierania współrzędnych geograficznych dla listy adresów.
+    
+    Sprawdza, czy funkcja `get_coordinates_for_addresses_batch` poprawnie zwraca słownik mapujący adresy na krotki (lat, lng) lub (None, None) w przypadku braku wyników, korzystając z mockowanego klienta Google Maps.
+    """
     mock_gmaps = Mock()
     
     # Definiujemy odpowiedzi dla różnych adresów
@@ -251,6 +292,15 @@ def test_get_coordinates_for_addresses_batch(monkeypatch):
     
     # Mockujemy funkcję geocode, aby zwracała odpowiednie wartości
     def mock_geocode(address):
+        """
+        Zwraca wynik geokodowania dla podanego adresu na podstawie zdefiniowanych odpowiedzi testowych.
+        
+        Args:
+        	address: Adres, dla którego ma zostać zwrócona odpowiedź geokodowania.
+        
+        Returns:
+        	Lista wyników geokodowania odpowiadająca adresowi lub pusta lista, jeśli brak odpowiedzi.
+        """
         return mock_responses.get(address, [])
     
     mock_gmaps.geocode = mock_geocode
