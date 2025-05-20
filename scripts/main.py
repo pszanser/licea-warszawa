@@ -2,20 +2,28 @@ import pandas as pd
 import re, unicodedata
 import os
 from pathlib import Path
+import sys
+
+if __name__ == "__main__" and __package__ is None:
+    project_root = Path(__file__).resolve().parent.parent
+    if str(project_root) not in sys.path: 
+        sys.path.insert(0, str(project_root))
+
 import time
 import datetime
 import yaml
 import logging
+import asyncio
 
 # Konfiguracja loggera
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
-from data_processing.load_minimum_points import load_min_points
-from data_processing.parser_perspektywy import parse_ranking_perspektywy_pdf  # lub parse_ranking_perspektywy_html
-from api_clients.googlemaps_api import get_travel_times_batch, get_next_weekday_time, get_coordinates_for_addresses_batch
-from analysis.score import add_metrics, compute_composite
-from config.constants import ALL_SUBJECTS
+from scripts.data_processing.load_minimum_points import load_min_points
+from scripts.data_processing.parser_perspektywy import parse_ranking_perspektywy_pdf  # lub parse_ranking_perspektywy_html
+from scripts.api_clients.googlemaps_api import get_travel_times_batch, get_next_weekday_time, get_coordinates_for_addresses_batch
+from scripts.analysis.score import add_metrics, compute_composite
+from scripts.config.constants import ALL_SUBJECTS
 import googlemaps
 
 # --- Stałe i ścieżki plików ---
@@ -86,11 +94,15 @@ def get_school_type(name):
             return "liceum"
 
 def wczytaj_dane_vulcan():
+    """
+    Wczytuje dane szkół z systemu Vulcan, pobierając je asynchronicznie lub wczytując z pliku cache.
+    
+    Jeśli plik z danymi nie istnieje, pobiera dane asynchronicznie i zapisuje je do pliku Excel; w przeciwnym razie wczytuje dane z istniejącego pliku. Zwraca DataFrame z danymi szkół.
+    """
     t0 = time.perf_counter()
     if not VULCAN_FILE.exists():
         logger.info(f"Pobieranie danych z Vulcan (async)...")
-        from data_processing.get_data_vulcan_async import download_all_async
-        import asyncio
+        from scripts.data_processing.get_data_vulcan_async import download_all_async
         df_vulcan = asyncio.run(download_all_async(1, 400, verbose=True))
         df_vulcan.to_excel(VULCAN_FILE, index=False)
         logger.info(f"Zapisano dane Vulcan do {VULCAN_FILE}")

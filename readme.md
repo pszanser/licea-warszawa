@@ -61,9 +61,7 @@ Zapytaj Devina o to repozytorium:
 │   │   ├── get_data_vulcan_async.py
 │   │   ├── load_minimum_points.py
 │   │   └── parser_perspektywy.py
-│   ├── tests/                # Skrypty testowe
-│   │   ├── __init__.py
-│   │   └── test_googlemaps_api.py
+│   ├── tests/                # Testy
 │   └── visualization/        # Skrypty do generowania wizualizacji i map
 │       ├── __init__.py
 │       ├── generate_map.py
