@@ -1,51 +1,23 @@
 import pytest
 import googlemaps
+from unittest.mock import Mock
+import datetime
+
 from scripts.api_clients.googlemaps_api import (
     get_travel_time,
     get_travel_times_batch,
     get_coordinates_for_addresses_batch,
     get_next_weekday_time,
 )
-from unittest.mock import Mock
-import datetime
 
-
-def _freeze_time(monkeypatch, ts: str) -> None:
+def test_get_travel_time(mock_gmaps_distance_matrix):
     """
-    Zamraża bieżący czas na określony moment podczas testów.
+    Testuje podstawową funkcjonalność get_travel_time.
     
-    Ustawia metody `datetime.date.today()` i `datetime.datetime.now()` tak, aby zawsze zwracały datę i czas określone w parametrze `ts` (w formacie ISO), umożliwiając deterministyczne testowanie funkcji zależnych od aktualnej daty i czasu.
+    Sprawdza, czy funkcja poprawnie konwertuje czas przejazdu z sekund na minuty 
+    i czy prawidłowo wywołuje API Google Maps.
     """
-    dt = datetime.datetime.fromisoformat(ts)
-
-    class FrozenDate(datetime.date):
-        @classmethod
-        def today(cls):
-            """
-            Zwraca bieżącą datę jako obiekt `date`.
-            """
-            return dt.date()
-
-    class FrozenDateTime(datetime.datetime):
-        @classmethod
-        def now(cls, tz=None):
-            """
-            Zwraca zamrożony czas jako obiekt datetime, opcjonalnie w podanej strefie czasowej.
-            
-            Args:
-            	tz: Opcjonalna strefa czasowa. Jeśli podana, czas zostanie przekonwertowany do tej strefy.
-            
-            Returns:
-            	Obiekt datetime reprezentujący zamrożony czas, w odpowiedniej strefie czasowej.
-            """
-            return dt if tz is None else dt.astimezone(tz)
-
-    monkeypatch.setattr(datetime, "date", FrozenDate)
-    monkeypatch.setattr(datetime, "datetime", FrozenDateTime)
-
-def test_get_travel_time(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps
-    mock_gmaps = Mock()
+    # Przygotowanie mockowanej odpowiedzi
     mock_result = {
         "rows": [
             {
@@ -57,11 +29,11 @@ def test_get_travel_time(monkeypatch):
             }
         ]
     }
-    mock_gmaps.distance_matrix.return_value = mock_result
+    mock_gmaps_distance_matrix.distance_matrix.return_value = mock_result
     
     # Wywołanie funkcji z mockowanym obiektem
     travel_time = get_travel_time(
-        mock_gmaps, 
+        mock_gmaps_distance_matrix, 
         "Adres początkowy", 
         "Adres docelowy", 
         sleep_s=0  # Wyłączamy opóźnienie w teście
@@ -69,21 +41,21 @@ def test_get_travel_time(monkeypatch):
     
     # Sprawdzenie wyników
     assert travel_time == 30  # 30 minut
-    mock_gmaps.distance_matrix.assert_called_once_with(
+    mock_gmaps_distance_matrix.distance_matrix.assert_called_once_with(
         origins=["Adres początkowy"],
         destinations=["Adres docelowy"],
         mode="transit",
         language="pl"
     )
 
-def test_get_travel_time_with_departure_time(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps
+def test_get_travel_time_with_departure_time(mock_gmaps_distance_matrix):
     """
     Testuje funkcję get_travel_time z parametrem departure_time.
     
-    Sprawdza, czy funkcja poprawnie przekazuje departure_time do wywołania API Google Maps oraz czy zwraca prawidłowy czas przejazdu w minutach na podstawie mockowanej odpowiedzi.
+    Sprawdza, czy funkcja poprawnie przekazuje departure_time do wywołania API Google Maps 
+    oraz czy zwraca prawidłowy czas przejazdu w minutach na podstawie mockowanej odpowiedzi.
     """
-    mock_gmaps = Mock()
+    # Przygotowanie mockowanej odpowiedzi
     mock_result = {
         "rows": [
             {
@@ -95,12 +67,12 @@ def test_get_travel_time_with_departure_time(monkeypatch):
             }
         ]
     }
-    mock_gmaps.distance_matrix.return_value = mock_result
+    mock_gmaps_distance_matrix.distance_matrix.return_value = mock_result
     departure_time = 1621234567  # przykładowy timestamp
     
     # Wywołanie funkcji z mockowanym obiektem
     travel_time = get_travel_time(
-        mock_gmaps, 
+        mock_gmaps_distance_matrix, 
         "Adres początkowy", 
         "Adres docelowy", 
         sleep_s=0,  # Wyłączamy opóźnienie w teście
@@ -109,7 +81,7 @@ def test_get_travel_time_with_departure_time(monkeypatch):
     
     # Sprawdzenie wyników
     assert travel_time == 30  # 30 minut
-    mock_gmaps.distance_matrix.assert_called_once_with(
+    mock_gmaps_distance_matrix.distance_matrix.assert_called_once_with(
         origins=["Adres początkowy"],
         destinations=["Adres docelowy"],
         mode="transit",
@@ -117,14 +89,19 @@ def test_get_travel_time_with_departure_time(monkeypatch):
         departure_time=departure_time
     )
 
-def test_get_travel_time_exception(monkeypatch):
+def test_get_travel_time_exception(mock_gmaps_distance_matrix):
+    """
+    Testuje zachowanie get_travel_time, gdy API zgłasza wyjątek.
+    
+    Sprawdza, czy funkcja poprawnie obsługuje wyjątki z API Google Maps,
+    zwracając None w przypadku błędu.
+    """
     # Przygotowanie mockowanego obiektu gmaps, który zgłasza wyjątek
-    mock_gmaps = Mock()
-    mock_gmaps.distance_matrix.side_effect = Exception("API Error")
+    mock_gmaps_distance_matrix.distance_matrix.side_effect = Exception("API Error")
     
     # Wywołanie funkcji z mockowanym obiektem
     travel_time = get_travel_time(
-        mock_gmaps, 
+        mock_gmaps_distance_matrix, 
         "Adres początkowy", 
         "Adres docelowy", 
         sleep_s=0  # Wyłączamy opóźnienie w teście
@@ -133,14 +110,15 @@ def test_get_travel_time_exception(monkeypatch):
     # Sprawdzenie wyników
     assert travel_time is None
 
-def test_get_travel_times_batch(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps
+def test_get_travel_times_batch(mock_gmaps_distance_matrix):
     """
     Testuje funkcję batchowego pobierania czasów podróży dla wielu miejsc docelowych.
     
-    Sprawdza, czy funkcja `get_travel_times_batch` poprawnie zwraca słownik z czasami podróży w minutach dla każdego miejsca docelowego lub `None`, gdy trasa nie jest dostępna. Weryfikuje także, czy wywołanie API Google Maps odbywa się z odpowiednimi parametrami.
+    Sprawdza, czy funkcja `get_travel_times_batch` poprawnie zwraca słownik z czasami podróży 
+    w minutach dla każdego miejsca docelowego lub `None`, gdy trasa nie jest dostępna. 
+    Weryfikuje także, czy wywołanie API Google Maps odbywa się z odpowiednimi parametrami.
     """
-    mock_gmaps = Mock()
+    # Przygotowanie mockowanej odpowiedzi
     mock_result = {
         "rows": [
             {
@@ -160,14 +138,14 @@ def test_get_travel_times_batch(monkeypatch):
             }
         ]
     }
-    mock_gmaps.distance_matrix.return_value = mock_result
+    mock_gmaps_distance_matrix.distance_matrix.return_value = mock_result
     
     # Dane wejściowe
     origin = "Adres początkowy"
     destinations = ["Miejsce 1", "Miejsce 2", "Miejsce niedostępne"]
     
     # Wywołanie funkcji z mockowanym obiektem
-    travel_times = get_travel_times_batch(mock_gmaps, origin, destinations)
+    travel_times = get_travel_times_batch(mock_gmaps_distance_matrix, origin, destinations)
     
     # Sprawdzenie wyników
     assert travel_times == {
@@ -175,21 +153,21 @@ def test_get_travel_times_batch(monkeypatch):
         "Miejsce 2": 40,
         "Miejsce niedostępne": None
     }
-    mock_gmaps.distance_matrix.assert_called_once_with(
+    mock_gmaps_distance_matrix.distance_matrix.assert_called_once_with(
         origins=[origin],
         destinations=destinations,
         mode="transit",
         language="pl"
     )
 
-def test_get_travel_times_batch_with_departure_time(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps
+def test_get_travel_times_batch_with_departure_time(mock_gmaps_distance_matrix):
     """
     Testuje funkcję get_travel_times_batch z parametrem departure_time.
     
-    Sprawdza, czy funkcja poprawnie zwraca czasy przejazdu w minutach dla wielu miejsc docelowych, przekazując departure_time do wywołania API Google Maps oraz czy wyniki są zgodne z oczekiwaniami.
+    Sprawdza, czy funkcja poprawnie zwraca czasy przejazdu w minutach dla wielu miejsc docelowych,
+    przekazując departure_time do wywołania API Google Maps oraz czy wyniki są zgodne z oczekiwaniami.
     """
-    mock_gmaps = Mock()
+    # Przygotowanie mockowanej odpowiedzi
     mock_result = {
         "rows": [
             {
@@ -206,7 +184,7 @@ def test_get_travel_times_batch_with_departure_time(monkeypatch):
             }
         ]
     }
-    mock_gmaps.distance_matrix.return_value = mock_result
+    mock_gmaps_distance_matrix.distance_matrix.return_value = mock_result
     
     # Dane wejściowe
     origin = "Adres początkowy"
@@ -215,7 +193,7 @@ def test_get_travel_times_batch_with_departure_time(monkeypatch):
     
     # Wywołanie funkcji z mockowanym obiektem
     travel_times = get_travel_times_batch(
-        mock_gmaps, 
+        mock_gmaps_distance_matrix, 
         origin, 
         destinations, 
         departure_time=departure_time
@@ -226,7 +204,7 @@ def test_get_travel_times_batch_with_departure_time(monkeypatch):
         "Miejsce 1": 30,
         "Miejsce 2": 40
     }
-    mock_gmaps.distance_matrix.assert_called_once_with(
+    mock_gmaps_distance_matrix.distance_matrix.assert_called_once_with(
         origins=[origin],
         destinations=destinations,
         mode="transit",
@@ -234,21 +212,23 @@ def test_get_travel_times_batch_with_departure_time(monkeypatch):
         departure_time=departure_time
     )
 
-def test_get_travel_times_batch_exception(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps, który zgłasza wyjątek
+def test_get_travel_times_batch_exception(mock_gmaps_distance_matrix):
     """
     Testuje, czy get_travel_times_batch zwraca None dla wszystkich adresów docelowych,
     gdy wywołanie API zgłasza wyjątek.
+    
+    Weryfikuje obsługę błędów API, zapewniając, że funkcja zwraca słownik z wartościami None
+    dla wszystkich adresów docelowych.
     """
-    mock_gmaps = Mock()
-    mock_gmaps.distance_matrix.side_effect = Exception("API Error")
+    # Przygotowanie mockowanego obiektu gmaps, który zgłasza wyjątek
+    mock_gmaps_distance_matrix.distance_matrix.side_effect = Exception("API Error")
     
     # Dane wejściowe
     origin = "Adres początkowy"
     destinations = ["Miejsce 1", "Miejsce 2"]
     
     # Wywołanie funkcji z mockowanym obiektem
-    travel_times = get_travel_times_batch(mock_gmaps, origin, destinations)
+    travel_times = get_travel_times_batch(mock_gmaps_distance_matrix, origin, destinations)
     
     # Sprawdzenie wyników - funkcja zwraca słownik z None dla wszystkich adresów
     assert travel_times == {
@@ -256,12 +236,14 @@ def test_get_travel_times_batch_exception(monkeypatch):
         "Miejsce 2": None
     }
 
-def test_get_coordinates_for_addresses_batch(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps
+@pytest.fixture
+def mock_gmaps_geocode_with_results():
     """
-    Testuje funkcję batchowego pobierania współrzędnych geograficznych dla listy adresów.
+    Fixture tworząca mockowany klient Google Maps z predefiniowanymi wynikami geokodowania.
     
-    Sprawdza, czy funkcja `get_coordinates_for_addresses_batch` poprawnie zwraca słownik mapujący adresy na krotki (lat, lng) lub (None, None) w przypadku braku wyników, korzystając z mockowanego klienta Google Maps.
+    Zwraca krotę (mock_gmaps, expected_coordinates), gdzie:
+    - mock_gmaps to mockowany klient Google Maps
+    - expected_coordinates to oczekiwane współrzędne dla testowych adresów
     """
     mock_gmaps = Mock()
     
@@ -290,20 +272,39 @@ def test_get_coordinates_for_addresses_batch(monkeypatch):
         "Niepoprawny adres": []  # Brak wyników dla niepoprawnego adresu
     }
     
+    # Oczekiwane współrzędne
+    expected_coordinates = {
+        "Adres 1": (52.2297, 21.0122),
+        "Adres 2": (50.0647, 19.9450),
+        "Niepoprawny adres": (None, None)
+    }
+    
     # Mockujemy funkcję geocode, aby zwracała odpowiednie wartości
     def mock_geocode(address):
         """
         Zwraca wynik geokodowania dla podanego adresu na podstawie zdefiniowanych odpowiedzi testowych.
         
         Args:
-        	address: Adres, dla którego ma zostać zwrócona odpowiedź geokodowania.
+            address: Adres, dla którego ma zostać zwrócona odpowiedź geokodowania.
         
         Returns:
-        	Lista wyników geokodowania odpowiadająca adresowi lub pusta lista, jeśli brak odpowiedzi.
+            Lista wyników geokodowania odpowiadająca adresowi lub pusta lista, jeśli brak odpowiedzi.
         """
         return mock_responses.get(address, [])
     
     mock_gmaps.geocode = mock_geocode
+    
+    return mock_gmaps, expected_coordinates
+
+def test_get_coordinates_for_addresses_batch(mock_gmaps_geocode_with_results):
+    """
+    Testuje funkcję batchowego pobierania współrzędnych geograficznych dla listy adresów.
+    
+    Sprawdza, czy funkcja `get_coordinates_for_addresses_batch` poprawnie zwraca słownik 
+    mapujący adresy na krotki (lat, lng) lub (None, None) w przypadku braku wyników,
+    korzystając z mockowanego klienta Google Maps.
+    """
+    mock_gmaps, expected_coordinates = mock_gmaps_geocode_with_results
     
     # Dane wejściowe
     addresses = ["Adres 1", "Adres 2", "Niepoprawny adres"]
@@ -312,25 +313,23 @@ def test_get_coordinates_for_addresses_batch(monkeypatch):
     coordinates = get_coordinates_for_addresses_batch(mock_gmaps, addresses, batch_size=2)
     
     # Sprawdzenie wyników
-    expected_coordinates = {
-        "Adres 1": (52.2297, 21.0122),
-        "Adres 2": (50.0647, 19.9450),
-        "Niepoprawny adres": (None, None)
-    }
     assert coordinates == expected_coordinates
 
-def test_get_coordinates_for_addresses_batch_exception(monkeypatch):
-    # Przygotowanie mockowanego obiektu gmaps
-    mock_gmaps = Mock()
+def test_get_coordinates_for_addresses_batch_exception(mock_gmaps_geocode):
+    """
+    Testuje zachowanie funkcji get_coordinates_for_addresses_batch w przypadku wyjątku z API.
     
-    # Mock funkcji geocode, która rzuca wyjątek
-    mock_gmaps.geocode.side_effect = Exception("API Error")
+    Sprawdza, czy funkcja poprawnie obsługuje błędy API, zwracając (None, None) dla wszystkich
+    adresów w przypadku zgłoszenia wyjątku przez geocode.
+    """
+    # Przygotowanie mockowanego obiektu gmaps, który zgłasza wyjątek
+    mock_gmaps_geocode.geocode.side_effect = Exception("API Error")
     
     # Dane wejściowe
     addresses = ["Adres 1", "Adres 2"]
     
     # Wywołanie funkcji z mockowanym obiektem
-    coordinates = get_coordinates_for_addresses_batch(mock_gmaps, addresses, batch_size=2)
+    coordinates = get_coordinates_for_addresses_batch(mock_gmaps_geocode, addresses, batch_size=2)
     
     # Sprawdzenie wyników - funkcja powinna zwrócić None dla wszystkich adresów
     expected_coordinates = {
@@ -339,8 +338,14 @@ def test_get_coordinates_for_addresses_batch_exception(monkeypatch):
     }
     assert coordinates == expected_coordinates
 
-def test_get_next_weekday_time_weekend(monkeypatch):
-    _freeze_time(monkeypatch, "2025-05-17")  # Sobota
+def test_get_next_weekday_time_weekend(freeze_time):
+    """
+    Testuje funkcję get_next_weekday_time w weekend.
+    
+    Sprawdza, czy funkcja poprawnie zwraca timestamp dla poniedziałku 
+    o zadanej godzinie, gdy wywołana w sobotę.
+    """
+    freeze_time("2025-05-17")  # Sobota
     # Funkcja powinna zwrócić timestamp dla poniedziałku (19.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 19, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
@@ -351,8 +356,14 @@ def test_get_next_weekday_time_weekend(monkeypatch):
     # Sprawdzenie wyników
     assert result_timestamp == expected_timestamp
 
-def test_get_next_weekday_time_weekday_before_hour(monkeypatch):
-    _freeze_time(monkeypatch, "2025-05-19 06:30:00")  # Poniedziałek, przed 7:30
+def test_get_next_weekday_time_weekday_before_hour(freeze_time):
+    """
+    Testuje funkcję get_next_weekday_time w dzień powszedni przed zadaną godziną.
+    
+    Sprawdza, czy funkcja poprawnie zwraca timestamp dla tego samego dnia
+    o zadanej godzinie, gdy wywołana przed tą godziną w dzień powszedni.
+    """
+    freeze_time("2025-05-19 06:30:00")  # Poniedziałek, przed 7:30
     # Funkcja powinna zwrócić timestamp dla tego samego dnia (19.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 19, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
@@ -363,8 +374,14 @@ def test_get_next_weekday_time_weekday_before_hour(monkeypatch):
     # Sprawdzenie wyników
     assert result_timestamp == expected_timestamp
 
-def test_get_next_weekday_time_weekday_after_hour(monkeypatch):
-    _freeze_time(monkeypatch, "2025-05-19 08:00:00")  # Poniedziałek, po 7:30
+def test_get_next_weekday_time_weekday_after_hour(freeze_time):
+    """
+    Testuje funkcję get_next_weekday_time w dzień powszedni po zadanej godzinie.
+    
+    Sprawdza, czy funkcja poprawnie zwraca timestamp dla następnego dnia powszedniego
+    o zadanej godzinie, gdy wywołana po tej godzinie w dzień powszedni.
+    """
+    freeze_time("2025-05-19 08:00:00")  # Poniedziałek, po 7:30
     # Funkcja powinna zwrócić timestamp dla następnego dnia (20.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 20, 7, 30)
     expected_timestamp = int(expected_date.timestamp())
@@ -375,8 +392,14 @@ def test_get_next_weekday_time_weekday_after_hour(monkeypatch):
     # Sprawdzenie wyników
     assert result_timestamp == expected_timestamp
 
-def test_get_next_weekday_time_friday_after_hour(monkeypatch):
-    _freeze_time(monkeypatch, "2025-05-23 08:00:00")  # Piątek, po 7:30
+def test_get_next_weekday_time_friday_after_hour(freeze_time):
+    """
+    Testuje funkcję get_next_weekday_time w piątek po zadanej godzinie.
+    
+    Sprawdza, czy funkcja poprawnie zwraca timestamp dla poniedziałku
+    o zadanej godzinie, gdy wywołana po tej godzinie w piątek (czyli pomija weekend).
+    """
+    freeze_time("2025-05-23 08:00:00")  # Piątek, po 7:30
     # Funkcja powinna zwrócić timestamp dla poniedziałku (26.05.2025) o 7:30
     expected_date = datetime.datetime(2025, 5, 26, 7, 30)
     expected_timestamp = int(expected_date.timestamp())

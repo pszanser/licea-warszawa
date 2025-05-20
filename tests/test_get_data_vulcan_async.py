@@ -9,117 +9,174 @@ from tests.fixtures.sample_school_html import (
 )
 from tests.fixtures.real_school_html import REAL_SCHOOL_HTML
 
-def test_parse_school_html_valid_case():
+
+@pytest.fixture
+def valid_school_data():
+    """
+    Fixture zwracająca dane testowe dla poprawnego HTML-a szkoły.
+    
+    Zawiera ID szkoły i listę oczekiwanych wyników parsowania.
+    """
+    school_id = 123
+    expected_results = [
+        # Pierwszy oddział (1A)
+        {
+            "id_szkoly": 123,
+            "nazwa_szkoly_match": "XCIX Liceum Ogólnokształcące z Oddziałami Dwujęzycznymi im. Zbigniewa Herberta",
+            "adres_szkoly_match": "ul. Fundamentowa 38/42, 04-036 Warszawa",
+            "nazwa_oddzialu": "1A - klasa matematyczna",
+            "przedmioty_rozszerzone": ["matematyka", "fizyka", "informatyka"],
+            "jezyki_obce": ["język angielski", "język niemiecki"],
+            "liczba_miejsc": "30",
+            "url_group_id": "456"
+        },
+        # Drugi oddział (1B)
+        {
+            "id_szkoly": 123,
+            "nazwa_szkoly_match": "XCIX Liceum Ogólnokształcące z Oddziałami Dwujęzycznymi im. Zbigniewa Herberta",
+            "adres_szkoly_match": "ul. Fundamentowa 38/42, 04-036 Warszawa",
+            "nazwa_oddzialu": "1B - klasa humanistyczna",
+            "przedmioty_rozszerzone": ["język polski", "historia", "wiedza o społeczeństwie"],
+            "jezyki_obce": ["język angielski", "język francuski"],
+            "liczba_miejsc": "28",
+            "url_group_id": "457"
+        }
+    ]
+    return school_id, expected_results
+
+
+@pytest.fixture
+def real_school_data():
+    """
+    Fixture zwracająca dane testowe dla rzeczywistego HTML-a szkoły.
+    
+    Zawiera ID szkoły i listę oczekiwanych wyników parsowania.
+    """
+    school_id = 999
+    expected_results = [
+        # Pierwszy oddział
+        {
+            "id_szkoly": 999,
+            "nazwa_szkoly_match": "VI Liceum Ogólnokształcące im. Tadeusza Reytana",
+            "adres_szkoly_match": "ul. Wiktorska 30/32, 02-587 Warszawa",
+            "nazwa_oddzialu": "1/1 [O] fiz-ang-mat (ang-niem)",
+            "przedmioty_rozszerzone_contain": ["fizyka", "język angielski", "matematyka"],
+            "jezyki_obce_contain": ["język angielski", "język niemiecki"],
+            "liczba_miejsc": "32",
+            "url_group_id": "9364"
+        },
+        # Drugi oddział
+        {
+            "id_szkoly": 999,
+            "nazwa_oddzialu": "1/2 [O] fiz-ang-mat (ang-hisz)",
+            "przedmioty_rozszerzone_contain": ["fizyka", "język angielski", "matematyka"],
+            "jezyki_obce_contain": ["język angielski", "język hiszpański"],
+            "liczba_miejsc": "32",
+            "url_group_id": "9379"
+        }
+    ]
+    return school_id, expected_results
+
+
+@pytest.mark.parametrize("html,school_id,expected_result", [
+    (ERROR_SCHOOL_HTML, 456, []),
+    (NO_GROUPS_SCHOOL_HTML, 789, []),
+    (HEADER_NO_TABLE_HTML, 101, []),
+    (INCOMPLETE_DATA_HTML, 102, [])
+])
+def test_parse_school_html_error_cases(html, school_id, expected_result):
+    """
+    Testuje zachowanie parse_school_html w przypadku niepoprawnych danych wejściowych.
+    
+    Sprawdza różne przypadki błędów:
+    - HTML z błędem wewnętrznym aplikacji
+    - HTML bez nagłówka grup rekrutacyjnych
+    - HTML z nagłówkiem, ale bez tabeli
+    - HTML z niepełnymi danymi w tabeli
+    """
+    results = parse_school_html(html, school_id)
+    assert results == expected_result
+
+
+def test_parse_school_html_valid_case(valid_school_data):
     """
     Testuje poprawność parsowania HTML-a z ofertą szkoły zawierającą grupy rekrutacyjne.
     
-    Funkcja sprawdza, czy parse_school_html zwraca poprawnie sformatowaną listę grup rekrutacyjnych na podstawie przykładowego HTML-a, weryfikując liczbę grup oraz szczegółowe dane każdej z nich, takie jak ID szkoły, nazwa, adres, nazwa oddziału, przedmioty rozszerzone, języki obce, liczba miejsc i poprawność linku do grupy.
+    Funkcja sprawdza, czy parse_school_html zwraca poprawnie sformatowaną listę grup rekrutacyjnych 
+    na podstawie przykładowego HTML-a, weryfikując liczbę grup oraz szczegółowe dane każdej z nich, 
+    takie jak ID szkoły, nazwa, adres, nazwa oddziału, przedmioty rozszerzone, języki obce, 
+    liczba miejsc i poprawność linku do grupy.
     """
-    school_id = 123
+    school_id, expected_data = valid_school_data
     results = parse_school_html(VALID_SCHOOL_HTML, school_id)
     
     # Sprawdź czy zwrócono poprawną liczbę wierszy (2 oddziały)
     assert len(results) == 2
     
-    # Sprawdź pierwszy wiersz (oddział 1A)
-    # Pobierz faktyczną nazwę szkoły i adres z wyniku funkcji
-    actual_school_name = results[0][1]
-    actual_school_address = results[0][2]
-    
-    assert results[0][0] == 123  # ID szkoły
-    assert "XCIX Liceum Ogólnokształcące z Oddziałami Dwujęzycznymi im. Zbigniewa Herberta" in actual_school_name  # Nazwa szkoły
-    assert "ul. Fundamentowa 38/42, 04-036 Warszawa" in actual_school_address  # Adres szkoły
-    assert results[0][3] == "1A - klasa matematyczna"  # Nazwa oddziału
-    assert "matematyka" in results[0][4] and "fizyka" in results[0][4] and "informatyka" in results[0][4]  # Przedmioty rozszerzone
-    assert "język angielski" in results[0][5] and "język niemiecki" in results[0][5]  # Języki obce
-    assert results[0][6] == "30"  # Liczba miejsc
-    assert "groupId=456" in results[0][7]  # URL grupy zawiera poprawne ID
-    
-    # Sprawdź drugi wiersz (oddział 1B)
-    # Używamy tych samych informacji o szkole, ponieważ to ten sam HTML
-    assert results[1][0] == 123  # ID szkoły
-    assert "XCIX Liceum Ogólnokształcące z Oddziałami Dwujęzycznymi im. Zbigniewa Herberta" in results[1][1]  # Nazwa szkoły
-    assert "ul. Fundamentowa 38/42, 04-036 Warszawa" in results[1][2]  # Adres szkoły
-    assert results[1][3] == "1B - klasa humanistyczna"  # Nazwa oddziału
-    assert "język polski" in results[1][4] and "historia" in results[1][4] and "wiedza o społeczeństwie" in results[1][4]  # Przedmioty rozszerzone
-    assert "język angielski" in results[1][5] and "język francuski" in results[1][5]  # Języki obce
-    assert results[1][6] == "28"  # Liczba miejsc
-    assert "groupId=457" in results[1][7]  # URL grupy zawiera poprawne ID
+    for i, expected in enumerate(expected_data):
+        # Sprawdź ID szkoły
+        assert results[i][0] == expected["id_szkoly"]
+        
+        # Sprawdź nazwę szkoły
+        assert expected["nazwa_szkoly_match"] in results[i][1]
+        
+        # Sprawdź adres szkoły
+        assert expected["adres_szkoly_match"] in results[i][2]
+        
+        # Sprawdź nazwę oddziału
+        assert results[i][3] == expected["nazwa_oddzialu"]
+        
+        # Sprawdź przedmioty rozszerzone
+        for subject in expected["przedmioty_rozszerzone"]:
+            assert subject in results[i][4]
+        
+        # Sprawdź języki obce
+        for language in expected["jezyki_obce"]:
+            assert language in results[i][5]
+        
+        # Sprawdź liczbę miejsc
+        assert results[i][6] == expected["liczba_miejsc"]
+        
+        # Sprawdź URL grupy
+        assert f"groupId={expected['url_group_id']}" in results[i][7]
 
-def test_parse_school_html_error_page():
-    """
-    Testuje, czy funkcja zwraca pustą listę dla HTML-a z błędem wewnętrznym aplikacji.
-    
-    Sprawdza, że w przypadku wykrycia strony błędu funkcja `parse_school_html` nie zwraca żadnych wyników.
-    """
-    school_id = 456
-    results = parse_school_html(ERROR_SCHOOL_HTML, school_id)
-    
-    # Gdy wykryto błąd wewnętrzny aplikacji, funkcja powinna zwrócić pustą listę
-    assert results == []
 
-def test_parse_school_html_no_groups():
-    """
-    Testuje, czy funkcja zwraca pustą listę dla HTML-a bez nagłówka grup rekrutacyjnych.
-    
-    Sprawdza przypadek, gdy w HTML-u brakuje sekcji "Lista grup rekrutacyjnych/oddziałów", co powinno skutkować brakiem wyników po przetwarzaniu.
-    """
-    school_id = 789
-    results = parse_school_html(NO_GROUPS_SCHOOL_HTML, school_id)
-    
-    # Gdy nie ma nagłówka "Lista grup rekrutacyjnych/oddziałów", funkcja powinna zwrócić pustą listę
-    assert results == []
-
-def test_parse_school_html_header_no_table():
-    """
-    Testuje przypadek, gdy HTML zawiera nagłówek grupy rekrutacyjnej, ale brak jest odpowiadającej mu tabeli.
-    
-    Sprawdza, czy funkcja `parse_school_html` zwraca pustą listę, gdy tabela z grupami rekrutacyjnymi nie występuje mimo obecności nagłówka.
-    """
-    school_id = 101
-    results = parse_school_html(HEADER_NO_TABLE_HTML, school_id)
-    
-    # Gdy jest nagłówek, ale nie ma tabeli, funkcja powinna zwrócić pustą listę
-    assert results == []
-
-def test_parse_school_html_incomplete_data():
-    """Test przetwarzania HTML-a z tabelą zawierającą niepełne dane."""
-    school_id = 102
-    # Ta funkcja powinna obsłużyć przypadek, gdy brakuje jakiejś kolumny w tabeli
-    # Oczekujemy, że funkcja przeanalizuje dane, ale pominie wiersz z niepełnymi danymi
-    results = parse_school_html(INCOMPLETE_DATA_HTML, school_id)
-    
-    # Tabela ma mniej kolumn niż oczekiwano (brak kolumny "Liczba miejsc"),
-    # więc wiersz ten zostanie pominięty (len(cells) < 4)
-    assert results == []
-
-def test_parse_real_school_html():
+def test_parse_real_school_html(real_school_data):
     """
     Testuje poprawność parsowania rzeczywistego HTML-a szkoły Vulcan przez funkcję parse_school_html.
     
-    Sprawdza, czy funkcja poprawnie wyodrębnia dane o szkole i dwóch grupach rekrutacyjnych, w tym nazwę szkoły, adres, nazwy oddziałów, przedmioty rozszerzone, języki obce, liczbę miejsc oraz identyfikatory grup w URL-ach.
+    Sprawdza, czy funkcja poprawnie wyodrębnia dane o szkole i dwóch grupach rekrutacyjnych, 
+    w tym nazwę szkoły, adres, nazwy oddziałów, przedmioty rozszerzone, języki obce, 
+    liczbę miejsc oraz identyfikatory grup w URL-ach.
     """
-    school_id = 999
+    school_id, expected_data = real_school_data
     results = parse_school_html(REAL_SCHOOL_HTML, school_id)
     
     # Sprawdź czy zwrócono poprawną liczbę wierszy (2 oddziały)
     assert len(results) == 2
     
-    # Sprawdź czy nazwa szkoły i adres zostały poprawnie wyodrębnione
-    assert "VI Liceum Ogólnokształcące im. Tadeusza Reytana" in results[0][1]  # Nazwa szkoły
-    assert "ul. Wiktorska 30/32, 02-587 Warszawa" in results[0][2]  # Adres szkoły
-    
     # Sprawdź pierwszy oddział
-    assert results[0][0] == 999  # ID szkoły
-    assert results[0][3] == "1/1 [O] fiz-ang-mat (ang-niem)"  # Nazwa oddziału
-    assert "fizyka" in results[0][4] and "język angielski" in results[0][4] and "matematyka" in results[0][4]  # Przedmioty rozszerzone
-    assert "język angielski" in results[0][5] and "język niemiecki" in results[0][5]  # Języki obce
-    assert results[0][6] == "32"  # Liczba miejsc
-    assert "groupId=9364" in results[0][7]  # URL grupy zawiera poprawne ID
+    for i, expected in enumerate(expected_data):
+        # Sprawdź ID szkoły
+        assert results[i][0] == expected["id_szkoly"]
+        
+        # Sprawdź nazwę oddziału
+        assert results[i][3] == expected["nazwa_oddzialu"]
+        
+        # Sprawdź przedmioty rozszerzone
+        for subject in expected["przedmioty_rozszerzone_contain"]:
+            assert subject in results[i][4]
+        
+        # Sprawdź języki obce
+        for language in expected["jezyki_obce_contain"]:
+            assert language in results[i][5]
+        
+        # Sprawdź liczbę miejsc
+        assert results[i][6] == expected["liczba_miejsc"]
+        
+        # Sprawdź URL grupy
+        assert f"groupId={expected['url_group_id']}" in results[i][7]
     
-    # Sprawdź drugi oddział
-    assert results[1][3] == "1/2 [O] fiz-ang-mat (ang-hisz)"  # Nazwa oddziału
-    assert "fizyka" in results[1][4] and "język angielski" in results[1][4] and "matematyka" in results[1][4]  # Przedmioty rozszerzone
-    assert "język angielski" in results[1][5] and "język hiszpański" in results[1][5]  # Języki obce
-    assert results[1][6] == "32"  # Liczba miejsc
-    assert "groupId=9379" in results[1][7]  # URL grupy zawiera poprawne ID
+    # Sprawdź wspólne dane dla pierwszego oddziału
+    assert expected_data[0]["nazwa_szkoly_match"] in results[0][1]
+    assert expected_data[0]["adres_szkoly_match"] in results[0][2]
