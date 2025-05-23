@@ -13,3 +13,4 @@ streamlit
 streamlit-folium
 numpy
 pytest
+reflex

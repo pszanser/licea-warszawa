@@ -121,6 +121,11 @@ Zapytaj Devina o to repozytorium:
     streamlit run scripts/visualization/streamlit_mapa_licea.py
     ```
     Aplikacja uruchomi się lokalnie i otworzy w domyślnej przeglądarce, umożliwiając interaktywną filtrację liceów.
+10.  Aby uruchomić analogiczną aplikację w Reflex:
+    ```powershell
+    reflex run scripts/visualization/reflex_mapa_licea.py
+    ```
+    Aplikacja otworzy się w przeglądarce i pozwoli na podobne filtrowanie.
 
 ## Główne funkcjonalności
 
