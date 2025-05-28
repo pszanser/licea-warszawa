@@ -5,7 +5,18 @@ from pathlib import Path
 import pandas as pd
 from typing import Callable, Any
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+import sys
+from importlib.util import spec_from_file_location, module_from_spec
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+MAIN_PATH = ROOT / "scripts" / "main.py"
+spec = spec_from_file_location("main", MAIN_PATH)
+main = module_from_spec(spec)
+spec.loader.exec_module(main)
+extract_class_type = main.extract_class_type
+
 RESULTS_DIR = ROOT / "results"
 DATA_PATTERN = "LO_Warszawa_2025_*.xlsx"
 MAP_OUTPUT_FILENAME = "mapa_licea_warszawa.html"
@@ -62,6 +73,8 @@ def load_classes_data(excel_path: Path) -> pd.DataFrame | None:
     """
     try:
         df = pd.read_excel(excel_path, sheet_name="klasy")
+        if "TypOddzialu" not in df.columns and "OddzialNazwa" in df.columns:
+            df["TypOddzialu"] = df["OddzialNazwa"].apply(extract_class_type)
         return df
     except Exception as e:
         print(f"Błąd podczas wczytywania arkusza 'klasy': {e}")
@@ -71,7 +84,8 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
     """Wyciąga listę przedmiotów rozszerzonych z kolumn DataFrame"""
     potential_subjects = [col for col in df.columns if col not in [
         'SzkolaIdentyfikator', 'OddzialIdentyfikator', 'OddzialNazwa', 'UrlGrupy',
-        'Prog_min_klasa', 'Prog_min_szkola', 'Prog_max_szkola', 'RankingPoz'
+        'Prog_min_klasa', 'Prog_min_szkola', 'Prog_max_szkola', 'RankingPoz',
+        'TypOddzialu'
     ]]
     subject_cols = []
     for col in potential_subjects:
@@ -86,6 +100,7 @@ def apply_filters_to_classes(
     max_ranking_poz: int | None,
     min_class_points: float | None,
     max_class_points: float | None,
+    allowed_class_types: list[str] | None = None,
     report_warning_callback: Callable[[str], Any] = print
 ) -> pd.DataFrame:
     """
@@ -124,7 +139,13 @@ def apply_filters_to_classes(
             df_filtered = df_filtered[df_filtered["Prog_min_szkola"] <= max_class_points]
         else:
             report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu max.")
-            
+
+    if allowed_class_types:
+        if "TypOddzialu" in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["TypOddzialu"].isin(allowed_class_types)]
+        else:
+            report_warning_callback("Kolumna 'TypOddzialu' nie znaleziona w danych do filtrowania typu oddziału.")
+
     return df_filtered
 
 def aggregate_filtered_class_data(

@@ -111,6 +111,7 @@ def main():
         st.write(f"Załadowano dane z pliku: **{latest_excel_file.name}**")
     
     available_subjects = get_subjects_from_dataframe(df_classes_raw)
+    available_class_types = sorted(df_classes_raw["TypOddzialu"].dropna().unique()) if "TypOddzialu" in df_classes_raw.columns else []
     
     with st.sidebar:
         st.header("Filtry")
@@ -151,7 +152,14 @@ def main():
             school_names,
             placeholder="Wybierz..."
         )
-        
+
+        st.subheader("Typ oddziału")
+        selected_class_types = st.multiselect(
+            "Wybierz typy oddziałów:",
+            available_class_types,
+            placeholder="Wybierz..."
+        )
+
         st.subheader("Filtr przedmiotów rozszerzonych")
         st.markdown("**Poszukiwane rozszerzenia** (klasa musi je mieć)")
         wanted_subjects_filter = st.multiselect(
@@ -221,6 +229,7 @@ def main():
         max_ranking_poz=max_ranking_poz_filter,
         min_class_points=min_class_points_filter,
         max_class_points=max_class_points_filter,
+        allowed_class_types=selected_class_types,
         report_warning_callback=st.warning
     )
 
@@ -231,6 +240,7 @@ def main():
         min_class_points_filter is not None,
         max_class_points_filter is not None,
         bool(selected_school_types),
+        bool(selected_class_types),
         bool(selected_school_names)
     ])
 
@@ -247,6 +257,8 @@ def main():
     filter_entries = []
     if selected_school_types:
         filter_entries.append(("Typ szkoły", ", ".join(selected_school_types)))
+    if selected_class_types:
+        filter_entries.append(("Typ oddziału", ", ".join(selected_class_types)))
     if selected_school_names:
         filter_entries.append(("Wybrane szkoły", ", ".join(selected_school_names)))
     if wanted_subjects_filter:
