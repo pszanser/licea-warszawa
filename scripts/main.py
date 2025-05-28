@@ -93,6 +93,13 @@ def get_school_type(name):
         else:
             return "liceum"
 
+def extract_class_type(class_name: str) -> str | None:
+    """Wyciąga typ oddziału z nazwy w nawiasach kwadratowych."""
+    if pd.isna(class_name):
+        return None
+    m = re.search(r"\[([^\]]+)\]", str(class_name))
+    return m.group(1).strip() if m else None
+
 def wczytaj_dane_vulcan():
     """
     Wczytuje dane szkół z systemu Vulcan, pobierając je asynchronicznie lub wczytując z pliku cache.
@@ -419,6 +426,9 @@ def main():
         .str.extract(r"\[[^\]]+\]\s*([^\(]+)")[0]  # wyciągnij tekst po [..] do nawiasu (lub końca)
         .str.strip()
     )
+
+    # dodaj kolumnę TypOddzialu na podstawie tekstu w nawiasach kwadratowych
+    df_merged["TypOddzialu"] = df_merged["OddzialNazwa"].apply(extract_class_type)
 
     # w kolumnie "JezykiObce" zamień "Pierwszy" na 1, "Drugi" na 2, "Trzeci" na 3, język na ""
     df_merged["JezykiObce"] = df_merged["JezykiObce"].str.replace("Pierwszy", "1").str.replace("Drugi", "2").str.replace("Trzeci", "3").str.replace("język", "")

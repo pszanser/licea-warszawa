@@ -1,7 +1,7 @@
 import pytest
 import datetime
 import unicodedata
-from scripts.main import normalize_name, get_school_type
+from scripts.main import normalize_name, get_school_type, extract_class_type
 from scripts.api_clients.googlemaps_api import get_next_weekday_time
 
 @pytest.mark.parametrize(
@@ -127,3 +127,11 @@ def test_get_next_weekday_time_weekend(freeze_time):
     assert dt.weekday() == 0  # Poniedziałek
     assert dt.hour == 7
     assert dt.minute == 30
+
+
+def test_extract_class_type():
+    """Testuje funkcję extract_class_type wyciągającą typ oddziału"""
+    assert extract_class_type("1Bf [O] fiz-ang-mat (ang-hisz*,niem*)") == "O"
+    assert extract_class_type("1Dint [I-i] h.szt.-ang-pol (ang-hisz*)") == "I-i"
+    assert extract_class_type("1a_piłka_ręczna [MS] biol-geogr-ang (ang-niem)") == "MS"
+    assert extract_class_type("Brak nawiasu") is None
