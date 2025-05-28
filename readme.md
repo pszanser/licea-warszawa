@@ -11,7 +11,7 @@ Posty na LinkedIn o procesie tworzenia:
 [1 - Python -> Excel](https://www.linkedin.com/posts/pszanser_sgh-liceum-edukacja-activity-7323984277598040065-8DO0)  
 [2 - Excel -> Asystent AI](https://www.linkedin.com/posts/pszanser_asystent-ai-do-wyboru-liceum-w-warszawie-activity-7328660490576990209-5mo8)  
 [3 - Excel -> Aplikacja z mapą](https://www.linkedin.com/posts/pszanser_liceum-edukacja-warszawa-activity-7328808246729658368-sw5m)  
-
+[4 - Otwarty projekt](https://www.linkedin.com/posts/pszanser_github-opensource-python-activity-7330834756634411009-2hCz)  
 
 Zapytaj Devina o to repozytorium:  
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pszanser/licea-warszawa)
