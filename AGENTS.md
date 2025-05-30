@@ -1,7 +1,27 @@
 # Przewodnik dla Agentów - Licea Warszawa
 
+**Cel tego dokumentu:** Ten plik (`AGENTS.MD`) służy jako Twój główny przewodnik do pracy w tym repozytorium. Zawiera kluczowe informacje o strukturze projektu, konfiguracji środowiska, standardach kodowania, testowaniu i sposobie prezentowania wyników Twojej pracy. Przestrzegaj go uważnie, aby Twoje zmiany były spójne i wysokiej jakości.
+
 ## Przegląd Projektu
 Ten projekt analizuje licea, technika i szkoły branżowe w Warszawie i okolicach. Integruje dane z systemu Vulcan, ranking Perspektyw, progi punktowe oraz czasy dojazdu z Google Maps API. Głównym produktem jest interaktywna aplikacja Streamlit z mapą i wizualizacjami.
+**Twoim nadrzędnym celem jest pomoc w rozwijaniu i utrzymaniu tego projektu, mając na uwadze jego końcowych użytkowników: rodziców i uczniów wybierających szkołę.**
+
+## Zasady Pracy Agenta
+
+*   **Zrozumienie Kontekstu**:
+    *   Zapoznaj się z `scripts/config/config.yml` oraz `scripts/main.py`, aby zrozumieć główny przepływ danych i konfigurację.
+    *   Sekcja `Kontekst Biznesowy` na końcu tego dokumentu wyjaśnia cel projektu – miej go na uwadze.
+*   **Weryfikacja Pracy**:
+    *   **Zawsze uruchamiaj testy (`pytest`)** po wprowadzeniu zmian, aby upewnić się, że niczego nie zepsułeś. Dąż do tego, aby wszystkie testy przechodziły.
+    *   **Proaktywnie dodawaj testy** dla nowych lub zmodyfikowanych funkcjonalności, nawet jeśli nie zostało to bezpośrednio zlecone. Zobacz sekcję `Testowanie`.
+    *   Używaj skonfigurowanych linterów i formatterów (np. Black, Flake8), jeśli są dostępne. Jeśli nie, stosuj się do PEP 8 i istniejącego stylu kodu.
+*   **Dokumentacja**:
+    *   Aktualizuj komentarze w kodzie oraz docstringi funkcji/klas, jeśli wprowadzasz zmiany w logice.
+*   **Komunikacja i Prezentacja Zmian**:
+    *   Przygotowując Pull Request (PR), ściśle przestrzegaj formatu opisanego w sekcji `Instrukcje dla PR`.
+    *   Jeśli zostaniesz poproszony o analizę, dostarczaj wnioski poparte danymi. Rozważ wygenerowanie odpowiednich wizualizacji, jeśli to pomoże zilustrować wyniki.
+*   **Dostęp do Sieci**:
+    *   Pamiętaj, że dostęp do internetu może być ograniczony (np. tylko podczas fazy instalacji zależności). Wszystkie potrzebne pakiety powinny być zdefiniowane w `requirements.txt`.
 
 ## Struktura Katalogów i Obszary Robocze
 
@@ -26,20 +46,29 @@ Ten projekt analizuje licea, technika i szkoły branżowe w Warszawie i okolicac
 ## Środowisko Deweloperskie
 
 ### Konfiguracja środowiska:
+Upewnij się, że pracujesz w skonfigurowanym środowisku Python. Główne polecenie instalacji zależności to:
 ```powershell
-# Utwórz i aktywuj środowisko wirtualne
-python -m venv .venv
-.venv\Scripts\activate
-
 # Zainstaluj zależności
+pip install -r requirements.txt
+```
+Jeśli tworzysz nowe środowisko:
+```powershell
+# Utwórz i aktywuj środowisko wirtualne (przykład dla lokalnego dewelopera)
+python -m venv .venv
+.venv\\Scripts\\activate # Dla Windows
+# source .venv/bin/activate # Dla Linux/macOS
+
 pip install -r requirements.txt
 ```
 
 ### Zmienne środowiskowe:
+Kluczową zmienną środowiskową jest `GOOGLE_MAPS_API_KEY`. **Musisz mieć ją ustawioną w swoim środowisku wykonawczym, aby funkcje związane z Google Maps działały poprawnie.**
+Przykład dla lokalnego dewelopera (Windows):
 ```powershell
 # Google Maps API (wymagane dla czasów dojazdu)
 setx GOOGLE_MAPS_API_KEY twój_klucz_api
 ```
+W środowisku kontenerowym (np. Docker), zmienna ta musi być przekazana do kontenera.
 
 ### Główne punkty wejścia:
 ```powershell
@@ -65,6 +94,7 @@ streamlit run scripts/visualization/streamlit_mapa_licea.py
 - Testy nazywane według wzorca `test_*.py`
 
 ### Uruchamianie testów:
+Użyj `pytest` do uruchamiania testów.
 ```powershell
 # Wszystkie testy
 pytest
@@ -78,12 +108,13 @@ pytest --cov=scripts
 # Verbose output
 pytest -v
 ```
+**Twoim obowiązkiem jest upewnienie się, że wszystkie testy przechodzą pomyślnie po Twoich modyfikacjach.**
 
 ### Dodawanie testów:
-- Dodaj testy dla każdej nowej funkcjonalności
-- Umieść test w odpowiednim pliku `test_*.py`
-- Użyj fixtures z `conftest.py` dla wspólnych danych testowych
-- Testuj zarówno pozytywne jak i negatywne scenariusze
+-   Dodawaj testy dla każdej nowej lub zmodyfikowanej funkcjonalności. Jest to kluczowe dla utrzymania jakości kodu.
+-   Umieść test w odpowiednim pliku `test_*.py`
+-   Użyj fixtures z `conftest.py` dla wspólnych danych testowych
+-   Testuj zarówno pozytywne jak i negatywne scenariusze
 
 ## Zasady Kodowania
 
@@ -105,18 +136,34 @@ pytest -v
 
 ## Walidacja Zmian
 
-### Przed commitem:
-1. **Uruchom testy**: `pytest`
-2. **Sprawdź główne workflow**: 
-   ```powershell
-   python scripts/main.py
-   python scripts/visualization/generate_visuals.py
-   ```
-3. **Testuj aplikację Streamlit**:
-   ```powershell
-   streamlit run scripts/visualization/streamlit_mapa_licea.py
-   ```
-4. **Sprawdź jakość kodu**: ustaw lintery jeśli potrzebne
+**Zanim zgłosisz swoje zmiany (np. w formie Pull Requestu), MUSISZ przeprowadzić następujące kroki walidacyjne:**
+
+1.  **Uruchom wszystkie testy**:
+    ```powershell
+    pytest
+    ```
+    Upewnij się, że wszystkie testy zakończyły się sukcesem.
+2.  **Sprawdź główne przepływy pracy**: Uruchom kluczowe skrypty, aby zweryfikować ich działanie z Twoimi zmianami.
+    ```powershell
+    python scripts/main.py
+    python scripts/visualization/generate_visuals.py
+    ```
+3.  **Przetestuj aplikację Streamlit** (jeśli Twoje zmiany mogły na nią wpłynąć):
+    ```powershell
+    streamlit run scripts/visualization/streamlit_mapa_licea.py
+    ```
+    Sprawdź interakcję i poprawność wyświetlanych danych.
+4.  **Sprawdź jakość kodu**:
+    *   Uruchom skonfigurowane lintery (np. Flake8) i formattery (np. Black).
+    *   Jeśli nie są skonfigurowane, upewnij się, że Twój kod jest zgodny z PEP 8 i spójny z resztą projektu.
+    *   Popraw wszelkie zgłoszone błędy lub ostrzeżenia.
+
+### Walidacja Zmian
+Przed zgłoszeniem zmian, agent MUSI wykonać następujące kroki:
+1.  Uruchomić formatowanie kodu: `black .`
+2.  Uruchomić linter: `flake8 scripts tests`
+3.  Uruchomić sprawdzanie typów: `mypy scripts` (upewnij się, że nie ma nowych błędów)
+4.  Uruchomić wszystkie testy: `pytest` (wszystkie testy muszą przejść)
 
 ## Praca z Danymi
 
@@ -139,6 +186,7 @@ pytest -v
 - Zachowuj oryginalne nazwy kolumn z systemów źródłowych
 
 ## Instrukcje dla PR
+Jako agent, będziesz prawdopodobnie tworzyć Pull Requesty (PR) z proponowanymi zmianami. Przestrzegaj poniższych zasad:
 
 ### Format tytułu:
 `[obszar] Krótki opis zmian`
@@ -151,19 +199,20 @@ Przykłady:
 - `[streamlit] Nowy filtr według typów oddziałów`
 
 ### Opis PR:
-- Opisz problem który rozwiązujesz
-- Wymień główne zmiany
-- Podaj instrukcje testowania
-- Dołącz screenshoty dla zmian UI/wizualizacji
-- Nie używaj PL znaków w 'branch name' na Github
+-   Opisz problem, który rozwiązujesz lub funkcjonalność, którą dodajesz.
+-   Wymień główne wprowadzone zmiany.
+-   Podaj kroki niezbędne do przetestowania Twoich zmian (jeśli wykraczają poza standardową walidację).
+-   Dołącz screenshoty dla zmian w interfejsie użytkownika lub wizualizacjach, jeśli to możliwe i zasadne.
+-   Nie używaj polskich znaków diakrytycznych w nazwie brancha na GitHub.
 
-### Checklist przed PR:
-- [ ] Testy przechodzą
-- [ ] Dodano testy dla nowych funkcji  
-- [ ] Sprawdzono główne workflow
-- [ ] Aplikacja Streamlit działa poprawnie
-- [ ] Zaktualizowano dokumentację jeśli potrzebne
-- [ ] Sprawdzono czy zmiany nie psują istniejących funkcji
+### Checklist przed utworzeniem PR (dla Ciebie, Agencie):
+Upewnij się, że:
+- [ ] Wszystkie testy jednostkowe i integracyjne przechodzą (`pytest`).
+- [ ] Dodałeś/zaktualizowałeś testy dla wprowadzonych zmian.
+- [ ] Przetestowałeś główne przepływy pracy (np. `scripts/main.py`).
+- [ ] Aplikacja Streamlit (jeśli dotyczy) działa poprawnie z Twoimi zmianami.
+- [ ] Zaktualizowałeś dokumentację (komentarze, docstringi, ten plik `AGENTS.md` jeśli to konieczne).
+- [ ] Twój kod jest sformatowany i zgodny ze standardami (np. PEP 8, Black, Flake8).
 
 ## Obszary Specjalne
 
