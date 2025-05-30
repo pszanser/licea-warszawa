@@ -254,7 +254,7 @@ def main():
         )
 
         st.subheader("Filtr przedmiotów rozszerzonych")
-        st.markdown("**Poszukiwane rozszerzenia** (klasa musi je mieć)")
+        st.markdown("**Poszukiwane rozszerzenia**")
         wanted_subjects_filter = st.multiselect(
             FILTER_LABELS["wanted_subjects"],
             available_subjects,
@@ -263,7 +263,7 @@ def main():
             help=FILTER_HELPS["wanted_subjects"],
         )
         
-        st.markdown("**Unikane rozszerzenia** (klasa nie może ich mieć)")
+        st.markdown("**Unikane rozszerzenia**")
         avoided_subjects_filter = st.multiselect(
             FILTER_LABELS["avoided_subjects"],
             available_subjects,
