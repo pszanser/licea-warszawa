@@ -168,13 +168,6 @@ pytest -v
 
 Upewnij się, że wszystkie powyższe kroki zostały wykonane i zakończyły się pomyślnie przed utworzeniem Pull Requestu lub zgłoszeniem zakończenia zadania.
 
-### Walidacja Zmian
-Przed zgłoszeniem zmian, agent MUSI wykonać następujące kroki:
-1.  Uruchomić formatowanie kodu: `black .`
-2.  Uruchomić linter: `flake8 scripts tests`
-3.  Uruchomić sprawdzanie typów: `mypy scripts` (upewnij się, że nie ma nowych błędów)
-4.  Uruchomić wszystkie testy: `pytest` (wszystkie testy muszą przejść)
-
 ## Praca z Danymi
 
 ### Źródła danych:
