@@ -37,6 +37,26 @@ FILTER_LABELS = {
     "bubble_commute": "Czas dojazdu vs próg (bąbelkowy)",
 }
 
+FILTER_DEFAULTS = {
+    "school_type": [],
+    "ranking_filter": False,
+    "school_names": [],
+    "class_types": [],
+    "wanted_subjects": [],
+    "avoided_subjects": [],
+    "points_filter": False,
+    "show_heatmap": False,
+    "histogram": True,
+    "bar_district": True,
+    "scatter_rank": True,
+    "cooccurrence": False,
+    "bubble_commute": False
+    # Uwaga: ranking_top i points_range nie są tutaj,
+    # ponieważ ich istnienie w session_state jest warunkowe
+    # i są obsługiwane przez 'del' podczas resetu,
+    # aby widgety mogły użyć swoich parametrów 'index'/'value'.
+}
+
 # Klucze widgetów używane w st.session_state (muszą być zgodne z parametrem key w widgetach)
 FILTER_KEYS_TO_CLEAR = [
     "school_type",
@@ -134,22 +154,9 @@ def main():
     Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
     """)
     
-    initial_filter_defaults = {
-        "school_type": [],
-        "ranking_filter": False,
-        "school_names": [],
-        "class_types": [],
-        "wanted_subjects": [],
-        "avoided_subjects": [],
-        "points_filter": False,
-        "show_heatmap": False,
-        "histogram": True,  
-        "bar_district": True,  
-        "scatter_rank": True, 
-        "cooccurrence": False,
-        "bubble_commute": False
-    }
-    for key, value in initial_filter_defaults.items():
+    # Initialize session state for filters if not already set
+    # Używamy globalnego FILTER_DEFAULTS
+    for key, value in FILTER_DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = value
             
@@ -177,34 +184,17 @@ def main():
         st.header("Filtry")
 
         if st.button("Resetuj filtry"):
-            # Define default values for session state keys
-            default_values = {
-                "school_type": [],
-                "ranking_filter": False,
-                "school_names": [],
-                "class_types": [],
-                "wanted_subjects": [],
-                "avoided_subjects": [],
-                "points_filter": False,
-                "show_heatmap": False,
-                "histogram": True,
-                "bar_district": True,
-                "scatter_rank": True,
-                "cooccurrence": False,
-                "bubble_commute": False
-            }
-
+            # Używamy globalnego FILTER_DEFAULTS
             for key_to_clear in FILTER_KEYS_TO_CLEAR:
                 if key_to_clear in st.session_state:
-                    if key_to_clear in default_values:
-                        st.session_state[key_to_clear] = default_values[key_to_clear]
+                    if key_to_clear in FILTER_DEFAULTS:
+                        st.session_state[key_to_clear] = FILTER_DEFAULTS[key_to_clear]
                     elif key_to_clear in ["ranking_top", "points_range"]:
-                        # These are conditional and will re-initialize with their
-                        # own defaults if their controlling checkbox is re-enabled.
-                        # Their controlling checkboxes are reset by the default_values above.
+                        # Te klucze są warunkowe i powinny zostać usunięte,
+                        # aby widgety użyły swoich domyślnych wartości (index/value)
+                        # przy następnym renderowaniu, jeśli ich kontrolki są aktywne.
                         del st.session_state[key_to_clear]
             st.rerun()
-
 
 
         st.subheader("Typ szkoły")
@@ -217,7 +207,7 @@ def main():
         )
 
         st.subheader("Ranking Perspektyw 2025")
-        use_ranking_filter = st.checkbox(FILTER_LABELS["ranking_filter"], value=False, key="ranking_filter")
+        use_ranking_filter = st.checkbox(FILTER_LABELS["ranking_filter"], key="ranking_filter")
         max_ranking_poz_filter = None
         if use_ranking_filter:
             max_ranking_positions = [10, 20, 30, 40, 50, 100]
@@ -274,7 +264,7 @@ def main():
         
         st.subheader("Progi punktowe szkoły")
         # checkbox, domyślnie False – filtr wyłączony
-        use_points_filter = st.checkbox(FILTER_LABELS["points_filter"], value=False, key="points_filter")
+        use_points_filter = st.checkbox(FILTER_LABELS["points_filter"], key="points_filter")
         if use_points_filter:
             min_pts = df_classes_raw["Prog_min_szkola"].min() \
                 if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 100.0
