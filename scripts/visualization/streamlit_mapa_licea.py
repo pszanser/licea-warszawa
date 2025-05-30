@@ -203,19 +203,25 @@ def main():
             FILTER_LABELS["school_type"],
             school_type_options,
             placeholder="Wybierz...",
-            key="school_type"
+            key="school_type",
+            help="Ogranicz listę do wybranego typu, np. liceum",
         )
 
         st.subheader("Ranking Perspektyw 2025")
-        use_ranking_filter = st.checkbox(FILTER_LABELS["ranking_filter"], key="ranking_filter")
+        use_ranking_filter = st.checkbox(
+            FILTER_LABELS["ranking_filter"],
+            key="ranking_filter",
+            help="Włącz, jeśli liczy się miejsce w rankingu",
+        )
         max_ranking_poz_filter = None
         if use_ranking_filter:
-            max_ranking_positions = [10, 20, 30, 40, 50, 100]
+            max_ranking_positions = [10, 20, 30, 40, 50, 75, 100]
             max_ranking_poz_filter = st.selectbox(
                 FILTER_LABELS["ranking_top"],
                 max_ranking_positions,
                 index=2,
-                key="ranking_top"
+                key="ranking_top",
+                help="Tylko licea z pierwszych pozycji",
             )
 
         st.subheader("Nazwa szkoły")
@@ -234,7 +240,8 @@ def main():
             FILTER_LABELS["school_names"],
             school_names,
             placeholder="Wybierz...",
-            key="school_names"
+            key="school_names",
+            help="Filtrowanie konkretnych szkół wg ich nazw",
         )
 
         st.subheader("Typ oddziału")
@@ -242,7 +249,8 @@ def main():
             FILTER_LABELS["class_types"],
             available_class_types,
             placeholder="Wybierz...",
-            key="class_types"
+            key="class_types",
+            help="np. ogólny [O] lub dwujęzyczny [D]/[DW]",
         )
 
         st.subheader("Filtr przedmiotów rozszerzonych")
@@ -251,7 +259,8 @@ def main():
             FILTER_LABELS["wanted_subjects"],
             available_subjects,
             placeholder="Wybierz...",
-            key="wanted_subjects"
+            key="wanted_subjects",
+            help="Klasa musi je oferować",
         )
         
         st.markdown("**Unikane rozszerzenia** (klasa nie może ich mieć)")
@@ -259,12 +268,17 @@ def main():
             FILTER_LABELS["avoided_subjects"],
             available_subjects,
             placeholder="Wybierz...",
-            key="avoided_subjects"
+            key="avoided_subjects",
+            help="Klasa nie może ich mieć",
         )
         
         st.subheader("Progi punktowe szkoły")
         # checkbox, domyślnie False – filtr wyłączony
-        use_points_filter = st.checkbox(FILTER_LABELS["points_filter"], key="points_filter")
+        use_points_filter = st.checkbox(
+            FILTER_LABELS["points_filter"],
+            key="points_filter",
+            help="Włącz, by określić minimalne progi",
+        )
         if use_points_filter:
             min_pts = df_classes_raw["Prog_min_szkola"].min() \
                 if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 100.0
@@ -278,7 +292,8 @@ def main():
                 max_value=300.0,
                 value=(min_pts, default_max),
                 step=1.0,
-                key="points_range"
+                key="points_range",
+                help="Wybierz dolny i górny próg",
             )
             min_class_points_filter, max_class_points_filter = points_range
         else:
@@ -287,14 +302,38 @@ def main():
 
         st.markdown("---")
 
-        show_heatmap = st.checkbox(FILTER_LABELS["show_heatmap"], key="show_heatmap")
+        show_heatmap = st.checkbox(
+            FILTER_LABELS["show_heatmap"],
+            key="show_heatmap",
+            help="Zobacz zagęszczenie placówek",
+        )
         
         st.subheader("Wykresy")
-        show_histogram = st.checkbox(FILTER_LABELS["histogram"], key="histogram")
-        show_bar_district = st.checkbox(FILTER_LABELS["bar_district"], key="bar_district")
-        show_scatter_rank = st.checkbox(FILTER_LABELS["scatter_rank"], key="scatter_rank")
-        show_cooccurrence = st.checkbox(FILTER_LABELS["cooccurrence"], key="cooccurrence")
-        show_bubble_commute = st.checkbox(FILTER_LABELS["bubble_commute"], key="bubble_commute")
+        show_histogram = st.checkbox(
+            FILTER_LABELS["histogram"],
+            key="histogram",
+            help="Histogram progów w klasach",
+        )
+        show_bar_district = st.checkbox(
+            FILTER_LABELS["bar_district"],
+            key="bar_district",
+            help="Porównanie dzielnic",
+        )
+        show_scatter_rank = st.checkbox(
+            FILTER_LABELS["scatter_rank"],
+            key="scatter_rank",
+            help="Zależność progu od rankingu",
+        )
+        show_cooccurrence = st.checkbox(
+            FILTER_LABELS["cooccurrence"],
+            key="cooccurrence",
+            help="Które rozszerzenia występują razem",
+        )
+        show_bubble_commute = st.checkbox(
+            FILTER_LABELS["bubble_commute"],
+            key="bubble_commute",
+            help="Próg szkoły a czas dojazdu",
+        )
         
     # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
     if selected_school_types:
