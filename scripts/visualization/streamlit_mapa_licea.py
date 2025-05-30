@@ -18,6 +18,7 @@ import io
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
 # stanu za pomocą wspólnej listy kluczy.
+
 FILTER_LABELS = {
     "school_type": "Wybierz typ szkoły:",
     "ranking_filter": "Filtruj według pozycji w rankingu liceów",
@@ -36,7 +37,24 @@ FILTER_LABELS = {
     "bubble_commute": "Czas dojazdu vs próg (bąbelkowy)",
 }
 
-FILTER_KEYS_TO_CLEAR = list(FILTER_LABELS.values())
+# Klucze widgetów używane w st.session_state (muszą być zgodne z parametrem key w widgetach)
+FILTER_KEYS_TO_CLEAR = [
+    "school_type",
+    "ranking_filter",
+    "ranking_top",
+    "school_names",
+    "class_types",
+    "wanted_subjects",
+    "avoided_subjects",
+    "points_filter",
+    "points_range",
+    "show_heatmap",
+    "histogram",
+    "bar_district",
+    "scatter_rank",
+    "cooccurrence",
+    "bubble_commute",
+]
 
 # Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
 scripts_dir = Path(__file__).resolve().parent.parent
@@ -116,6 +134,25 @@ def main():
     Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
     """)
     
+    initial_filter_defaults = {
+        "school_type": [],
+        "ranking_filter": False,
+        "school_names": [],
+        "class_types": [],
+        "wanted_subjects": [],
+        "avoided_subjects": [],
+        "points_filter": False,
+        "show_heatmap": False,
+        "histogram": True,  
+        "bar_district": True,  
+        "scatter_rank": True, 
+        "cooccurrence": False,
+        "bubble_commute": False
+    }
+    for key, value in initial_filter_defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+            
     latest_excel_file = get_latest_xls_file(RESULTS_DIR, DATA_PATTERN)
     if not latest_excel_file:
         st.error("Nie można wygenerować mapy bez pliku danych.")
@@ -138,10 +175,36 @@ def main():
     
     with st.sidebar:
         st.header("Filtry")
+
         if st.button("Resetuj filtry"):
-            for key in FILTER_KEYS_TO_CLEAR:
-                if key in st.session_state:
-                    del st.session_state[key]
+            # Define default values for session state keys
+            default_values = {
+                "school_type": [],
+                "ranking_filter": False,
+                "school_names": [],
+                "class_types": [],
+                "wanted_subjects": [],
+                "avoided_subjects": [],
+                "points_filter": False,
+                "show_heatmap": False,
+                "histogram": True,
+                "bar_district": True,
+                "scatter_rank": True,
+                "cooccurrence": False,
+                "bubble_commute": False
+            }
+
+            for key_to_clear in FILTER_KEYS_TO_CLEAR:
+                if key_to_clear in st.session_state:
+                    if key_to_clear in default_values:
+                        st.session_state[key_to_clear] = default_values[key_to_clear]
+                    elif key_to_clear in ["ranking_top", "points_range"]:
+                        # These are conditional and will re-initialize with their
+                        # own defaults if their controlling checkbox is re-enabled.
+                        # Their controlling checkboxes are reset by the default_values above.
+                        del st.session_state[key_to_clear]
+            st.rerun()
+
 
 
         st.subheader("Typ szkoły")
@@ -149,18 +212,20 @@ def main():
         selected_school_types = st.multiselect(
             FILTER_LABELS["school_type"],
             school_type_options,
-            placeholder="Wybierz..."
+            placeholder="Wybierz...",
+            key="school_type"
         )
 
         st.subheader("Ranking Perspektyw 2025")
-        use_ranking_filter = st.checkbox(FILTER_LABELS["ranking_filter"], value=False)
+        use_ranking_filter = st.checkbox(FILTER_LABELS["ranking_filter"], value=False, key="ranking_filter")
         max_ranking_poz_filter = None
         if use_ranking_filter:
             max_ranking_positions = [10, 20, 30, 40, 50, 100]
             max_ranking_poz_filter = st.selectbox(
                 FILTER_LABELS["ranking_top"],
                 max_ranking_positions,
-                index=2
+                index=2,
+                key="ranking_top"
             )
 
         st.subheader("Nazwa szkoły")
@@ -178,14 +243,16 @@ def main():
         selected_school_names = st.multiselect(
             FILTER_LABELS["school_names"],
             school_names,
-            placeholder="Wybierz..."
+            placeholder="Wybierz...",
+            key="school_names"
         )
 
         st.subheader("Typ oddziału")
         selected_class_types = st.multiselect(
             FILTER_LABELS["class_types"],
             available_class_types,
-            placeholder="Wybierz..."
+            placeholder="Wybierz...",
+            key="class_types"
         )
 
         st.subheader("Filtr przedmiotów rozszerzonych")
@@ -193,21 +260,21 @@ def main():
         wanted_subjects_filter = st.multiselect(
             FILTER_LABELS["wanted_subjects"],
             available_subjects,
-            default=[],
-            placeholder="Wybierz..."
+            placeholder="Wybierz...",
+            key="wanted_subjects"
         )
         
         st.markdown("**Unikane rozszerzenia** (klasa nie może ich mieć)")
         avoided_subjects_filter = st.multiselect(
             FILTER_LABELS["avoided_subjects"],
             available_subjects,
-            default=[],
-            placeholder="Wybierz..."
+            placeholder="Wybierz...",
+            key="avoided_subjects"
         )
         
         st.subheader("Progi punktowe szkoły")
         # checkbox, domyślnie False – filtr wyłączony
-        use_points_filter = st.checkbox(FILTER_LABELS["points_filter"], value=False)
+        use_points_filter = st.checkbox(FILTER_LABELS["points_filter"], value=False, key="points_filter")
         if use_points_filter:
             min_pts = df_classes_raw["Prog_min_szkola"].min() \
                 if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 100.0
@@ -220,7 +287,8 @@ def main():
                 min_value=min_pts,
                 max_value=300.0,
                 value=(min_pts, default_max),
-                step=1.0
+                step=1.0,
+                key="points_range"
             )
             min_class_points_filter, max_class_points_filter = points_range
         else:
@@ -229,14 +297,14 @@ def main():
 
         st.markdown("---")
 
-        show_heatmap = st.checkbox(FILTER_LABELS["show_heatmap"], value=False)
+        show_heatmap = st.checkbox(FILTER_LABELS["show_heatmap"], key="show_heatmap")
         
         st.subheader("Wykresy")
-        show_histogram = st.checkbox(FILTER_LABELS["histogram"], value=True)
-        show_bar_district = st.checkbox(FILTER_LABELS["bar_district"], value=True)
-        show_scatter_rank = st.checkbox(FILTER_LABELS["scatter_rank"], value=True)
-        show_cooccurrence = st.checkbox(FILTER_LABELS["cooccurrence"], value=False)
-        show_bubble_commute = st.checkbox(FILTER_LABELS["bubble_commute"], value=False)
+        show_histogram = st.checkbox(FILTER_LABELS["histogram"], key="histogram")
+        show_bar_district = st.checkbox(FILTER_LABELS["bar_district"], key="bar_district")
+        show_scatter_rank = st.checkbox(FILTER_LABELS["scatter_rank"], key="scatter_rank")
+        show_cooccurrence = st.checkbox(FILTER_LABELS["cooccurrence"], key="cooccurrence")
+        show_bubble_commute = st.checkbox(FILTER_LABELS["bubble_commute"], key="bubble_commute")
         
     # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
     if selected_school_types:
