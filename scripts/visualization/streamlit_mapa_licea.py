@@ -14,6 +14,7 @@ from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
 import numbers
 import io
+from scripts import geo
 
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
@@ -500,7 +501,29 @@ def main():
 
     with tab_map:
         st.subheader("Mapa szkół")
-        st_folium(map_object, width=None, height=600, returned_objects=[])
+        loc_data = st_folium(
+            map_object, width=None, height=600, returned_objects=["last_clicked"]
+        )
+
+        if loc_data and loc_data.get("last_clicked"):
+            lat = loc_data["last_clicked"]["lat"]
+            lon = loc_data["last_clicked"]["lng"]
+            nearest_df = geo.find_nearest_schools(
+                (
+                    df_schools_to_display
+                    if not df_schools_to_display.empty
+                    else df_schools_raw
+                ),
+                lat,
+                lon,
+                top_n=5,
+            )
+            st.write("Najbliższe szkoły:")
+            st.table(
+                nearest_df[
+                    ["NazwaSzkoly", "AdresSzkoly", "Dzielnica", "DistanceKm"]
+                ].rename(columns={"DistanceKm": "Dystans [km]"})
+            )
 
         if not df_filtered_classes.empty:
             buf = io.BytesIO()
