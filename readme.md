@@ -116,11 +116,16 @@ Zapytaj Devina o to repozytorium:
     python scripts/visualization/generate_map.py
     ```
     Mapa `mapa_licea_warszawa.html` zostanie zapisana w folderze `results/`.
-9.  Aby uruchomić interaktywną aplikację Streamlit z mapą i filtrami oraz wizualizacjami:
+9.  Aby uruchomić interaktywną aplikację Streamlit z mapą i zaawansowanymi filtrami oraz wizualizacjami:
     ```powershell
     streamlit run scripts/visualization/streamlit_mapa_licea.py
     ```
-    Aplikacja uruchomi się lokalnie i otworzy w domyślnej przeglądarce, umożliwiając interaktywną filtrację liceów.
+    Aplikacja uruchomi się lokalnie i otworzy w domyślnej przeglądarce. Oferuje:
+    *   **Zaawansowane filtrowanie** - typ szkoły, ranking Perspektyw, nazwy szkół, typy oddziałów, przedmioty rozszerzone, progi punktowe
+    *   **Interaktywną mapę** z opcjonalną warstwą cieplną (heatmap)
+    *   **Wizualizacje** - histogram progów, wykresy dzielnic, korelacje ranking-próg, współwystępowanie przedmiotów
+    *   **Export danych** - możliwość pobrania przefiltrowanych klas do Excel
+    *   **Przycisk resetowania** wszystkich filtrów jednocześnie
 
 ## Główne funkcjonalności
 
@@ -139,7 +144,14 @@ Zapytaj Devina o to repozytorium:
 *   **Tryb pełnoekranowy i przycisk "Znajdź mnie":** Mapa wykorzystuje wtyczki `Fullscreen` oraz `LocateControl`, pozwalając na wygodne przełączanie na pełny ekran i szybkie odnalezienie bieżącej lokalizacji użytkownika.
 *   **Opcjonalna warstwa HeatMap:** Można włączyć podgląd gęstości szkół przyciskiem na mapie (w pliku HTML) lub checkboxem w aplikacji Streamlit.
 *   **Nawigacja do szkoły:** W okienku informacji adres szkoły jest klikalny i otwiera Google Maps z trasą do wybranej placówki.
-*   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia aplikację webową.
+*   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia zaawansowaną aplikację webową z:
+    *   Rozbudowanym panelem filtrów (typ szkoły, ranking, nazwy szkół, typy oddziałów, przedmioty rozszerzone, progi punktowe)
+    *   Przyciskiem resetowania wszystkich filtrów
+    *   Zakładkami "Mapa" i "Wizualizacje" dla lepszej organizacji treści
+    *   Metrykami podsumowującymi (liczba szkół/klas, średni próg)
+    *   Możliwością pobrania przefiltrowanych danych do pliku Excel
+    *   Expandowaną listą pasujących szkół z kluczowymi statystykami
+    *   Interaktywnymi wykresami (histogram progów, liczba klas w dzielnicach, ranking vs próg, współwystępowanie rozszerzeń, wykres bąbelkowy czasu dojazdu)
 
 ## Uwagi
 *   **Konfiguracja:** Kluczowe parametry działania skryptów znajdują się w pliku `scripts/config/config.yml`.
