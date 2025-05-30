@@ -122,7 +122,7 @@ def main():
             "Wybierz typ szkoły:",
             school_type_options,
             placeholder="Wybierz...",
-            help="Ogranicz listę do wybranego typu",
+            help="Ogranicz listę do wybranego typu, np. liceum",
         )
 
         st.subheader("Ranking Perspektyw 2025")
@@ -133,12 +133,12 @@ def main():
         )
         max_ranking_poz_filter = None
         if use_ranking_filter:
-            max_ranking_positions = [10, 20, 30, 40, 50, 100]
+            max_ranking_positions = [10, 20, 30, 40, 50, 75, 100]
             max_ranking_poz_filter = st.selectbox(
                 "Pokaż licea z TOP:",
                 max_ranking_positions,
                 index=2,
-                help="Tylko szkoły z pierwszych pozycji",
+                help="Tylko licea z pierwszych pozycji",
             )
 
         st.subheader("Nazwa szkoły")
@@ -157,7 +157,7 @@ def main():
             "Wybierz szkoły do wyświetlenia:",
             school_names,
             placeholder="Wybierz...",
-            help="Filtrowanie konkretnych szkół",
+            help="Filtrowanie konkretnych szkół wg ich nazw",
         )
 
         st.subheader("Typ oddziału")
@@ -165,7 +165,7 @@ def main():
             "Wybierz typy oddziałów:",
             available_class_types,
             placeholder="Wybierz...",
-            help="np. ogólny lub dwujęzyczny",
+            help="np. ogólny [O] lub dwujęzyczny [D]/[DW]",
         )
 
         st.subheader("Filtr przedmiotów rozszerzonych")
