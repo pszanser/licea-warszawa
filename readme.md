@@ -22,13 +22,16 @@ Zapytaj Devina o to repozytorium:
   - [Struktura katalogów](#struktura-katalogów)
   - [Jak zacząć](#jak-zacząć)
   - [Główne funkcjonalności](#główne-funkcjonalności)
+    - [Przetwarzanie danych](#przetwarzanie-danych)
+    - [Wizualizacje i analizy](#wizualizacje-i-analizy)
+    - [Interaktywna aplikacja Streamlit](#interaktywna-aplikacja-streamlit)
   - [Uwagi](#uwagi)
   - [Wykorzystywane biblioteki](#wykorzystywane-biblioteki)
-    - [1. Analiza danych i obliczenia](#1-analiza-danych-i-obliczenia)
-    - [2. Przetwarzanie plików](#2-przetwarzanie-plików)
-    - [3. HTTP, API i web scraping](#3-http-api-i-web-scraping)
-    - [4. Wizualizacja i mapowanie](#4-wizualizacja-i-mapowanie)
-    - [5. Budowa interaktywnych aplikacji (dashboardów)](#5-budowa-interaktywnych-aplikacji-dashboardów)
+    - [Analiza danych i obliczenia](#analiza-danych-i-obliczenia)
+    - [Przetwarzanie plików](#przetwarzanie-plików)
+    - [HTTP, API i web scraping](#http-api-i-web-scraping)
+    - [Wizualizacja i mapowanie](#wizualizacja-i-mapowanie)
+    - [Aplikacje webowe](#aplikacje-webowe)
   - [Współtworzenie](#współtworzenie)
 
 ## Struktura katalogów
@@ -116,108 +119,73 @@ Zapytaj Devina o to repozytorium:
     python scripts/visualization/generate_map.py
     ```
     Mapa `mapa_licea_warszawa.html` zostanie zapisana w folderze `results/`.
-9.  Aby uruchomić interaktywną aplikację Streamlit z mapą i zaawansowanymi filtrami oraz wizualizacjami:
+9.  Aby uruchomić interaktywną aplikację Streamlit z zaawansowanymi funkcjami opisanymi w sekcji "Główne funkcjonalności":
     ```powershell
     streamlit run scripts/visualization/streamlit_mapa_licea.py
     ```
-    Aplikacja uruchomi się lokalnie i otworzy w domyślnej przeglądarce. Oferuje:
-    *   **Zaawansowane filtrowanie** - typ szkoły, ranking Perspektyw, nazwy szkół, typy oddziałów, przedmioty rozszerzone, progi punktowe
-    *   **Interaktywną mapę** z opcjonalną warstwą cieplną (heatmap)
-    *   **Wizualizacje** - histogram progów, wykresy dzielnic, korelacje ranking-próg, współwystępowanie przedmiotów
-    *   **Export danych** - możliwość pobrania przefiltrowanych klas do Excel
-    *   **Przycisk resetowania** wszystkich filtrów jednocześnie
 
 ## Główne funkcjonalności
 
-*   **Pobieranie danych** Skrypt `main.py` (korzystając z `scripts/data_processing/get_data_vulcan_async.py`) automatycznie pobierze dane o szkołach z systemu Vulcan.
-*   **Parsowanie rankingu Perspektyw:** Ranking jest parsowany z PDF (przez `scripts/data_processing/parser_perspektywy.py`).
-*   **Wczytywanie progów punktowych:** Dane o progach wczytywane są przez `scripts/data_processing/load_minimum_points.py`.
-*   **Obliczanie czasów dojazdu i geokodowanie:**
-    *   Skrypt `main.py` (korzystając z `scripts/api_clients/googlemaps_api.py`) oblicza czasy dojazdu z adresu domowego (z `scripts/config/config.yml`).
-    *   W zapytaniach do **Google Maps API** przekazywana jest pełna fraza zawierająca nazwę szkoły i jej adres, co zwiększa precyzję geokodowania.
-*   **Normalizacja i łączenie danych:** 
-*   **Filtrowanie:** 
-*   **Scoring:** Opcjonalnie obliczany jest wskaźnik przez `scripts/analysis/score.py`.
-*   **Generowanie wizualizacji:** Skrypt `scripts/visualization/generate_visuals.py` tworzy wykresy.
-*   **Generowanie interaktywnej mapy:** Skrypt `scripts/visualization/generate_map.py` tworzy mapę.
-*   **Grupowanie znaczników na mapie:** Dzięki `folium.plugins.MarkerCluster` ikony szkół łączą się w klastry, co zmniejsza bałagan wizualny i poprawia czytelność przy małym powiększeniu mapy.
-*   **Tryb pełnoekranowy i przycisk "Znajdź mnie":** Mapa wykorzystuje wtyczki `Fullscreen` oraz `LocateControl`, pozwalając na wygodne przełączanie na pełny ekran i szybkie odnalezienie bieżącej lokalizacji użytkownika.
-*   **Opcjonalna warstwa HeatMap:** Można włączyć podgląd gęstości szkół przyciskiem na mapie (w pliku HTML) lub checkboxem w aplikacji Streamlit.
-*   **Nawigacja do szkoły:** W okienku informacji adres szkoły jest klikalny i otwiera Google Maps z trasą do wybranej placówki.
-*   **Interaktywna aplikacja Streamlit:** Skrypt `scripts/visualization/streamlit_mapa_licea.py` uruchamia zaawansowaną aplikację webową z:
-    *   Rozbudowanym panelem filtrów (typ szkoły, ranking, nazwy szkół, typy oddziałów, przedmioty rozszerzone, progi punktowe)
-    *   Przyciskiem resetowania wszystkich filtrów
-    *   Zakładkami "Mapa" i "Wizualizacje" dla lepszej organizacji treści
-    *   Metrykami podsumowującymi (liczba szkół/klas, średni próg)
-    *   Możliwością pobrania przefiltrowanych danych do pliku Excel
-    *   Expandowaną listą pasujących szkół z kluczowymi statystykami
-    *   Interaktywnymi wykresami (histogram progów, liczba klas w dzielnicach, ranking vs próg, współwystępowanie rozszerzeń, wykres bąbelkowy czasu dojazdu)
+### Przetwarzanie danych
+*   **Pobieranie danych:** Automatyczne pobieranie danych o szkołach z systemu Vulcan
+*   **Parsowanie rankingu Perspektyw:** Ekstrakcja danych z PDF rankingu
+*   **Wczytywanie progów punktowych:** Integracja z historycznymi danymi o progach
+*   **Obliczanie czasów dojazdu:** Precyzyjne geokodowanie i kalkulacja czasu podróży przez Google Maps API
+*   **Scoring:** Opcjonalny złożony wskaźnik oceny szkół
+
+### Wizualizacje i analizy
+*   **Statyczne wykresy:** Histogramy, wykresy korelacji, analizy rozkładów
+*   **Interaktywna mapa:** Mapa z klastrowaniem znaczników, trybem pełnoekranowym, lokalizacją użytkownika i opcjonalną warstwą gęstości
+*   **Nawigacja:** Klikalne adresy otwierające trasę w Google Maps
+
+### Interaktywna aplikacja Streamlit
+Zaawansowana aplikacja webowa z:
+*   **Rozbudowanym panelem filtrów:** typ szkoły, ranking, nazwy, typy oddziałów, przedmioty rozszerzone, progi punktowe
+*   **Przyciskiem resetowania** wszystkich filtrów
+*   **Zakładkami "Mapa" i "Wizualizacje"** dla lepszej organizacji
+*   **Metrykami podsumowującymi:** liczba szkół/klas, średni próg
+*   **Eksportem do Excel** przefiltrowanych danych
+*   **Expandowaną listą szkół** z kluczowymi statystykami
+*   **Interaktywnymi wykresami:** histogram progów, analiza dzielnic, korelacje rankingu, współwystępowanie rozszerzeń, wykresy bąbelkowe
 
 ## Uwagi
-*   **Konfiguracja:** Kluczowe parametry działania skryptów znajdują się w pliku `scripts/config/config.yml`.
-*   **Google Maps API**: Wymagany klucz API w zmiennej środowiskowej `GOOGLE_MAPS_API_KEY`. 
-    * **Zalecane:** Aby ustawić zmienną na stałe w systemie Windows (PowerShell lub CMD):
-      ```powershell
-      setx GOOGLE_MAPS_API_KEY twój_klucz_api
-      ```
-      Po ustawieniu otwórz nowe okno terminala, aby zmienna była widoczna.
-    * Tymczasowo (tylko na czas bieżącej sesji):
-      ```powershell
-      set GOOGLE_MAPS_API_KEY=twój_klucz_api
-      ```
-    * W systemie Linux/MacOS (bash):
-      ```bash
-      export GOOGLE_MAPS_API_KEY=twój_klucz_api
-      ```
-    * **Uwaga:** Bez ustawionej zmiennej `GOOGLE_MAPS_API_KEY` czasy dojazdu nie zostaną obliczone i odpowiednie kolumny w plikach wynikowych pozostaną puste.
-*   **Wymuszenie odświeżenia danych:** Zmodyfikuj flagę `pobierz_nowe_czasy` w `scripts/config/config.yml`.
+*   **Konfiguracja:** Kluczowe parametry działania znajdują się w `scripts/config/config.yml`
+*   **Google Maps API:** Wymagany klucz API w zmiennej środowiskowej `GOOGLE_MAPS_API_KEY`
+    ```powershell
+    # Windows (na stałe):
+    setx GOOGLE_MAPS_API_KEY twój_klucz_api
+    
+    # Tymczasowo (sesja):
+    set GOOGLE_MAPS_API_KEY=twój_klucz_api
+    ```
+    Bez ustawionej zmiennej czasy dojazdu nie zostaną obliczone
+*   **Odświeżenie danych:** Użyj flagi `pobierz_nowe_czasy` w pliku konfiguracyjnym
 
 ## Wykorzystywane biblioteki
 
-Poniżej grupuję wymienione biblioteki według głównych zastosowań i zamieszczam krótkie opisy każdej z nich.
+### Analiza danych i obliczenia
+* **NumPy** – Podstawowa biblioteka do obliczeń numerycznych, wielowymiarowe tablice i szybkie operacje matematyczne
+* **pandas** – Manipulacja i analiza danych tabelarycznych (DataFrame), wczytywanie i przetwarzanie dużych zbiorów danych
 
-### 1. Analiza danych i obliczenia
+### Przetwarzanie plików
+* **openpyxl** – Odczyt i zapis arkuszy Excel (.xlsx)
+* **pdfplumber** – Ekstrakcja tekstu i tabel z dokumentów PDF
+* **PyYAML** – Parsowanie plików konfiguracyjnych YAML
 
-* **NumPy**
-  Podstawowa biblioteka do obliczeń numerycznych w Pythonie – oferuje wielowymiarowe tablice (ndarray) oraz szybkie operacje matematyczne.
-* **pandas**
-  Rozbudowany zestaw narzędzi do manipulacji i analizy danych tabelarycznych (DataFrame), wczytywania/wykonywania operacji na dużych zbiorach danych.
+### HTTP, API i web scraping
+* **requests** – Synchroniczne zapytania HTTP
+* **aiohttp** – Asynchroniczne zapytania HTTP dla lepszej wydajności
+* **BeautifulSoup4** – Parsowanie HTML/XML do web scrapingu
+* **googlemaps** – Klient Google Maps API (geokodowanie, trasy, odległości)
 
-### 2. Przetwarzanie plików
+### Wizualizacja i mapowanie
+* **matplotlib** – Podstawowe wykresy 2D
+* **seaborn** – Estetyczne wykresy statystyczne (nakładka na matplotlib)
+* **folium** – Interaktywne mapy Leaflet
+* **streamlit-folium** – Integracja map Folium ze Streamlit
 
-* **openpyxl**
-  Odczyt i zapis arkuszy kalkulacyjnych Excel (.xlsx), umożliwia tworzenie, modyfikację i odczyt struktury skoroszytów.
-* **pdfplumber**
-  Ekstrakcja tekstu, tabel i metadanych z dokumentów PDF, pozwala na precyzyjne wydobywanie zawartości.
-* **PyYAML**
-  Parsowanie i generowanie plików w formacie YAML (konfiguracja, wymiana danych), proste mapowanie struktur Pythona ↔ YAML.
-
-### 3. HTTP, API i web scraping
-
-* **requests**
-  Najpopularniejsza biblioteka do synchronizowanych zapytań HTTP (GET/POST itp.) – prosta i czytelna składnia.
-* **aiohttp**
-  Asynchroniczne klient–serwer HTTP, pozwala na równoległe wykonywanie wielu zapytań bez blokowania wątków.
-* **BeautifulSoup4**
-  Parsowanie i nawigacja po drzewie HTML/XML – ułatwia wydobywanie danych ze stron WWW po pobraniu ich np. przez `requests`.
-* **googlemaps**
-  Klient Pythona do Google Maps API: geokodowanie, obliczanie tras, odległości, wyszukiwanie miejsc itp.
-
-### 4. Wizualizacja i mapowanie
-
-* **matplotlib**
-  Uniwersalna biblioteka do tworzenia wykresów 2D (linie, słupki, rozrzuty itd.) – fundament wielu innych narzędzi wizualizacyjnych.
-* **seaborn**
-  Nakładka na matplotlib, ułatwia tworzenie estetycznych wykresów statystycznych z prostą obsługą kolorów i stylów.
-* **folium**
-  Generowanie interaktywnych map Leaflet w Pythonie – dodawanie znaczników, warstw, obrysów i warstw geograficznych.
-* **streamlit-folium**
-  Komponent dla Streamlita, który pozwala łatwo osadzać i komunikować się z mapami stworzonymi za pomocą Folium.
-
-### 5. Budowa interaktywnych aplikacji (dashboardów)
-
-* **Streamlit**
-  Prosty framework do szybkiego tworzenia interaktywnych aplikacji webowych (dashboardów, wizualizacji), bez konieczności znajomości front-endu.
+### Aplikacje webowe
+* **Streamlit** – Framework do szybkiego tworzenia interaktywnych aplikacji webowych
 
 ## Współtworzenie
 
