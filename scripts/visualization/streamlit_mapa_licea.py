@@ -37,6 +37,24 @@ FILTER_LABELS = {
     "bubble_commute": "Czas dojazdu vs próg (bąbelkowy)",
 }
 
+FILTER_HELPS = {
+    "school_type": "Ogranicz listę do wybranego typu, np. liceum",
+    "ranking_filter": "Włącz, jeśli liczy się miejsce w rankingu",
+    "ranking_top": "Tylko licea z pierwszych pozycji",
+    "school_names": "Filtrowanie konkretnych szkół wg ich nazw",
+    "class_types": "np. ogólny [O] lub dwujęzyczny [D]/[DW]",
+    "wanted_subjects": "Klasa musi je oferować",
+    "avoided_subjects": "Klasa nie może ich mieć",
+    "points_filter": "Włącz, by określić minimalne progi",
+    "points_range": "Wybierz dolny i górny próg",
+    "show_heatmap": "Zobacz zagęszczenie placówek",
+    "histogram": "Histogram progów w klasach",
+    "bar_district": "Porównanie dzielnic",
+    "scatter_rank": "Zależność progu od rankingu",
+    "cooccurrence": "Które rozszerzenia występują razem",
+    "bubble_commute": "Próg szkoły a czas dojazdu",
+}
+
 FILTER_DEFAULTS = {
     "school_type": [],
     "ranking_filter": False,
@@ -56,25 +74,6 @@ FILTER_DEFAULTS = {
     # i są obsługiwane przez 'del' podczas resetu,
     # aby widgety mogły użyć swoich parametrów 'index'/'value'.
 }
-
-# Klucze widgetów używane w st.session_state (muszą być zgodne z parametrem key w widgetach)
-FILTER_KEYS_TO_CLEAR = [
-    "school_type",
-    "ranking_filter",
-    "ranking_top",
-    "school_names",
-    "class_types",
-    "wanted_subjects",
-    "avoided_subjects",
-    "points_filter",
-    "points_range",
-    "show_heatmap",
-    "histogram",
-    "bar_district",
-    "scatter_rank",
-    "cooccurrence",
-    "bubble_commute",
-]
 
 # Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
 scripts_dir = Path(__file__).resolve().parent.parent
@@ -185,14 +184,15 @@ def main():
 
         if st.button("Resetuj filtry"):
             # Używamy globalnego FILTER_DEFAULTS
-            for key_to_clear in FILTER_KEYS_TO_CLEAR:
+            # Iterujemy po kluczach z FILTER_LABELS, ponieważ zawiera wszystkie klucze filtrów
+            for key_to_clear in FILTER_LABELS.keys():
                 if key_to_clear in st.session_state:
                     if key_to_clear in FILTER_DEFAULTS:
                         st.session_state[key_to_clear] = FILTER_DEFAULTS[key_to_clear]
+                    # Specjalna obsługa dla kluczy, które nie są w FILTER_DEFAULTS,
+                    # ale są kontrolowane przez inne widgety (np. checkbox)
+                    # i powinny zostać usunięte, aby widgety użyły swoich domyślnych wartości.
                     elif key_to_clear in ["ranking_top", "points_range"]:
-                        # Te klucze są warunkowe i powinny zostać usunięte,
-                        # aby widgety użyły swoich domyślnych wartości (index/value)
-                        # przy następnym renderowaniu, jeśli ich kontrolki są aktywne.
                         del st.session_state[key_to_clear]
             st.rerun()
 
@@ -204,14 +204,14 @@ def main():
             school_type_options,
             placeholder="Wybierz...",
             key="school_type",
-            help="Ogranicz listę do wybranego typu, np. liceum",
+            help=FILTER_HELPS["school_type"],
         )
 
         st.subheader("Ranking Perspektyw 2025")
         use_ranking_filter = st.checkbox(
             FILTER_LABELS["ranking_filter"],
             key="ranking_filter",
-            help="Włącz, jeśli liczy się miejsce w rankingu",
+            help=FILTER_HELPS["ranking_filter"],
         )
         max_ranking_poz_filter = None
         if use_ranking_filter:
@@ -221,7 +221,7 @@ def main():
                 max_ranking_positions,
                 index=2,
                 key="ranking_top",
-                help="Tylko licea z pierwszych pozycji",
+                help=FILTER_HELPS["ranking_top"],
             )
 
         st.subheader("Nazwa szkoły")
@@ -241,7 +241,7 @@ def main():
             school_names,
             placeholder="Wybierz...",
             key="school_names",
-            help="Filtrowanie konkretnych szkół wg ich nazw",
+            help=FILTER_HELPS["school_names"],
         )
 
         st.subheader("Typ oddziału")
@@ -250,7 +250,7 @@ def main():
             available_class_types,
             placeholder="Wybierz...",
             key="class_types",
-            help="np. ogólny [O] lub dwujęzyczny [D]/[DW]",
+            help=FILTER_HELPS["class_types"],
         )
 
         st.subheader("Filtr przedmiotów rozszerzonych")
@@ -260,7 +260,7 @@ def main():
             available_subjects,
             placeholder="Wybierz...",
             key="wanted_subjects",
-            help="Klasa musi je oferować",
+            help=FILTER_HELPS["wanted_subjects"],
         )
         
         st.markdown("**Unikane rozszerzenia** (klasa nie może ich mieć)")
@@ -269,7 +269,7 @@ def main():
             available_subjects,
             placeholder="Wybierz...",
             key="avoided_subjects",
-            help="Klasa nie może ich mieć",
+            help=FILTER_HELPS["avoided_subjects"],
         )
         
         st.subheader("Progi punktowe szkoły")
@@ -277,7 +277,7 @@ def main():
         use_points_filter = st.checkbox(
             FILTER_LABELS["points_filter"],
             key="points_filter",
-            help="Włącz, by określić minimalne progi",
+            help=FILTER_HELPS["points_filter"],
         )
         if use_points_filter:
             min_pts = df_classes_raw["Prog_min_szkola"].min() \
@@ -293,7 +293,7 @@ def main():
                 value=(min_pts, default_max),
                 step=1.0,
                 key="points_range",
-                help="Wybierz dolny i górny próg",
+                help=FILTER_HELPS["points_range"],
             )
             min_class_points_filter, max_class_points_filter = points_range
         else:
@@ -305,34 +305,34 @@ def main():
         show_heatmap = st.checkbox(
             FILTER_LABELS["show_heatmap"],
             key="show_heatmap",
-            help="Zobacz zagęszczenie placówek",
+            help=FILTER_HELPS["show_heatmap"],
         )
         
         st.subheader("Wykresy")
         show_histogram = st.checkbox(
             FILTER_LABELS["histogram"],
             key="histogram",
-            help="Histogram progów w klasach",
+            help=FILTER_HELPS["histogram"],
         )
         show_bar_district = st.checkbox(
             FILTER_LABELS["bar_district"],
             key="bar_district",
-            help="Porównanie dzielnic",
+            help=FILTER_HELPS["bar_district"],
         )
         show_scatter_rank = st.checkbox(
             FILTER_LABELS["scatter_rank"],
             key="scatter_rank",
-            help="Zależność progu od rankingu",
+            help=FILTER_HELPS["scatter_rank"],
         )
         show_cooccurrence = st.checkbox(
             FILTER_LABELS["cooccurrence"],
             key="cooccurrence",
-            help="Które rozszerzenia występują razem",
+            help=FILTER_HELPS["cooccurrence"],
         )
         show_bubble_commute = st.checkbox(
             FILTER_LABELS["bubble_commute"],
             key="bubble_commute",
-            help="Próg szkoły a czas dojazdu",
+            help=FILTER_HELPS["bubble_commute"],
         )
         
     # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
