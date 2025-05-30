@@ -62,7 +62,9 @@ def load_excel_data(xls_path: Path):
         print(
             f"Ostrzeżenie: Nie udało się wczytać arkusza 'szkoly' z pliku {xls_path}. {e}"
         )
-        print("Heatmapy zależne od danych z arkusza 'szkoly' mogą nie zostać wygenerowane.")
+        print(
+            "Heatmapy zależne od danych z arkusza 'szkoly' mogą nie zostać wygenerowane."
+        )
         df_szkoly = None
     return df_klasy, df_szkoly
 

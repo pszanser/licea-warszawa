@@ -13,10 +13,11 @@ COLUMNS = [
     "PrzedmiotyRozszerzone",
     "JezykiObce",
     "LiczbaMiejsc",
-    "UrlGrupy"
+    "UrlGrupy",
 ]
 
 SEM = asyncio.Semaphore(32)  # max równoczesnych żądań
+
 
 def parse_school_html(html, school_id):
     soup = BeautifulSoup(html, "html.parser")
@@ -31,7 +32,7 @@ def parse_school_html(html, school_id):
         lines_found = []
         while ptr and ptr.name != "h3":
             ptr = ptr.next_sibling
-            if ptr and getattr(ptr, 'string', None) and ptr.string.strip():
+            if ptr and getattr(ptr, "string", None) and ptr.string.strip():
                 lines_found.append(ptr.string.strip())
         if len(lines_found) >= 2:
             school_name = lines_found[0]
@@ -61,17 +62,20 @@ def parse_school_html(html, school_id):
         przedmioty_rozszerzone = cells[1].get_text(separator=" ").strip()
         jezyki_obce = cells[2].get_text(separator=" ").strip()
         liczba_miejsc = cells[3].get_text(strip=True)
-        results.append([
-            school_id,
-            school_name,
-            school_address,
-            oddzial_nazwa,
-            przedmioty_rozszerzone,
-            jezyki_obce,
-            liczba_miejsc,
-            url_grupy
-        ])
+        results.append(
+            [
+                school_id,
+                school_name,
+                school_address,
+                oddzial_nazwa,
+                przedmioty_rozszerzone,
+                jezyki_obce,
+                liczba_miejsc,
+                url_grupy,
+            ]
+        )
     return results
+
 
 async def fetch_school(session, school_id):
     url = f"https://warszawa.edu.com.pl/kandydat/app/offer_school_details.xhtml?schoolId={school_id}"
@@ -81,9 +85,12 @@ async def fetch_school(session, school_id):
         html = await r.text()
         return parse_school_html(html, school_id)
 
+
 async def download_all_async(start_id=1, end_id=400, verbose=True):
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as session:
-        tasks = [fetch_school(session, i) for i in range(start_id, end_id+1)]
+    async with aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(total=60)
+    ) as session:
+        tasks = [fetch_school(session, i) for i in range(start_id, end_id + 1)]
         all_rows = []
         for i, task in enumerate(asyncio.as_completed(tasks), start=start_id):
             rows = await task
@@ -92,15 +99,17 @@ async def download_all_async(start_id=1, end_id=400, verbose=True):
             all_rows.extend(rows)
     df = pd.DataFrame(all_rows, columns=COLUMNS)
     # Sortowanie po IdSzkoly (jako liczba) i OddzialNazwa (alfabetycznie)
-    df['IdSzkoly'] = pd.to_numeric(df['IdSzkoly'], errors='coerce')
-    df = df.sort_values(['IdSzkoly', 'OddzialNazwa']).reset_index(drop=True)
+    df["IdSzkoly"] = pd.to_numeric(df["IdSzkoly"], errors="coerce")
+    df = df.sort_values(["IdSzkoly", "OddzialNazwa"]).reset_index(drop=True)
     return df
+
 
 def main():
     df = asyncio.run(download_all_async(1, 400, verbose=True))
     print(f"Łączna liczba wierszy = {len(df)}")
     df.to_excel("results/szkoly_vulcan_async.xlsx", index=False)
     print("Zapisano do szkoly_vulcan_async.xlsx")
+
 
 if __name__ == "__main__":
     main()

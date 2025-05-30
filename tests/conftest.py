@@ -13,22 +13,23 @@ if str(ROOT_DIR) not in sys.path:
 def freeze_time(monkeypatch):
     """
     Fixture do zamrażania czasu w testach.
-    
+
     Zwraca funkcję, która można użyć do ustawienia konkretnej daty i czasu podczas testów.
-    
+
     Przykład użycia:
         def test_something(freeze_time):
             freeze_time("2025-05-17")  # Ustaw datę na 17 maja 2025
             # Teraz datetime.datetime.now() zwróci tę datę
     """
+
     def _freeze(ts: str) -> None:
         """
         Zamraża bieżący czas na określony moment podczas testów.
-        
-        Ustawia metody `datetime.date.today()` i `datetime.datetime.now()` tak, aby zawsze 
-        zwracały datę i czas określone w parametrze `ts` (w formacie ISO), umożliwiając 
+
+        Ustawia metody `datetime.date.today()` i `datetime.datetime.now()` tak, aby zawsze
+        zwracały datę i czas określone w parametrze `ts` (w formacie ISO), umożliwiając
         deterministyczne testowanie funkcji zależnych od aktualnej daty i czasu.
-        
+
         Args:
             ts: Data i czas w formacie ISO (np. "2025-05-17" lub "2025-05-17 08:00:00")
         """
@@ -45,10 +46,10 @@ def freeze_time(monkeypatch):
             def now(cls, tz=None):
                 """
                 Zwraca zamrożony czas jako obiekt datetime, opcjonalnie w podanej strefie czasowej.
-                
+
                 Args:
                     tz: Opcjonalna strefa czasowa. Jeśli podana, czas zostanie przekonwertowany do tej strefy.
-                
+
                 Returns:
                     Obiekt datetime reprezentujący zamrożony czas, w odpowiedniej strefie czasowej.
                 """
@@ -64,15 +65,15 @@ def freeze_time(monkeypatch):
 def mock_gmaps_distance_matrix():
     """
     Fixture tworząca mockowany klient Google Maps dla testów funkcji distance_matrix.
-    
-    Zwraca mockowany obiekt klienta Google Maps, który można skonfigurować 
+
+    Zwraca mockowany obiekt klienta Google Maps, który można skonfigurować
     dla różnych przypadków testowych.
-    
+
     Przykład użycia:
         def test_something(mock_gmaps_distance_matrix):
             # Konfiguracja odpowiedzi
             mock_gmaps_distance_matrix.return_value = {...}
-            
+
             # Test funkcji używającej klienta
             result = my_function(mock_gmaps_distance_matrix)
     """
@@ -85,15 +86,15 @@ def mock_gmaps_distance_matrix():
 def mock_gmaps_geocode():
     """
     Fixture tworząca mockowany klient Google Maps dla testów funkcji geocode.
-    
-    Zwraca mockowany obiekt klienta Google Maps, który można skonfigurować 
+
+    Zwraca mockowany obiekt klienta Google Maps, który można skonfigurować
     dla różnych przypadków testowych związanych z geokodowaniem.
-    
+
     Przykład użycia:
         def test_something(mock_gmaps_geocode):
             # Konfiguracja odpowiedzi
             mock_gmaps_geocode.geocode.return_value = [...]
-            
+
             # Test funkcji używającej klienta
             result = my_function(mock_gmaps_geocode)
     """
