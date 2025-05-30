@@ -4,6 +4,7 @@
 import pandas as pd
 from bs4 import BeautifulSoup
 
+
 def parse_ranking_perspektywy_html(html_file_path):
     """
     Odczytuje plik HTML z rankingiem Perspektyw i zwraca DataFrame
@@ -29,11 +30,13 @@ def parse_ranking_perspektywy_html(html_file_path):
         dzielnica = cells[2].get_text(strip=True)
         hist24 = cells[3].get_text(strip=True)
         # itp.
-        wsk = cells[6].get_text(strip=True) if len(cells)>6 else ""
+        wsk = cells[6].get_text(strip=True) if len(cells) > 6 else ""
 
         data.append([poz, nazwa, dzielnica, hist24, wsk])
 
-    df = pd.DataFrame(data, columns=["RankingPoz", "NazwaSzkoly", "Dzielnica", "Historia24", "WSK"])
+    df = pd.DataFrame(
+        data, columns=["RankingPoz", "NazwaSzkoly", "Dzielnica", "Historia24", "WSK"]
+    )
     df["RankingPoz"] = pd.to_numeric(df["RankingPoz"], errors="coerce")
     return df
 
@@ -46,9 +49,27 @@ def parse_ranking_perspektywy_pdf(pdf_file_path):
     import pdfplumber
 
     import re
+
     data_rows = []
     dzielnice = [
-        "Bemowo", "Białołęka", "Bielany", "Mokotów", "Ochota", "Praga Płd.", "Praga Płn.", "Rembertów", "Śródmieście", "Targówek", "Ursus", "Ursynów", "Wawer", "Wesoła", "Wilanów", "Włochy", "Wola", "Żoliborz"
+        "Bemowo",
+        "Białołęka",
+        "Bielany",
+        "Mokotów",
+        "Ochota",
+        "Praga Płd.",
+        "Praga Płn.",
+        "Rembertów",
+        "Śródmieście",
+        "Targówek",
+        "Ursus",
+        "Ursynów",
+        "Wawer",
+        "Wesoła",
+        "Wilanów",
+        "Włochy",
+        "Wola",
+        "Żoliborz",
     ]
     with pdfplumber.open(pdf_file_path) as pdf:
         for page in pdf.pages:
@@ -67,7 +88,7 @@ def parse_ranking_perspektywy_pdf(pdf_file_path):
                         dzielnica = dzielnica_kand
                     else:
                         # Jeśli trzecia kolumna nie jest dzielnicą, może to druga część nazwy szkoły
-                        nazwa = (nazwa.rstrip() + dzielnica_kand.lstrip())
+                        nazwa = nazwa.rstrip() + dzielnica_kand.lstrip()
 
                 if not dzielnica and len(row) > 3:
                     for extra_col in row[3:]:
@@ -91,6 +112,7 @@ def main():
 
     # Zapis
     df_pdf.to_excel("results/ranking_perspektywy.xlsx", index=False)
+
 
 if __name__ == "__main__":
     main()

@@ -68,7 +68,7 @@ FILTER_DEFAULTS = {
     "bar_district": True,
     "scatter_rank": True,
     "cooccurrence": False,
-    "bubble_commute": False
+    "bubble_commute": False,
     # Uwaga: ranking_top i points_range nie są tutaj,
     # ponieważ ich istnienie w session_state jest warunkowe
     # i są obsługiwane przez 'del' podczas resetu,
@@ -95,12 +95,13 @@ from visualization.generate_map import (
 )
 from visualization import plots
 
+
 def create_schools_map_streamlit(
     df_schools_to_display: pd.DataFrame,
     class_count_per_school: dict,
     filtered_class_details_per_school: dict,
     school_summary_from_filtered: dict,
-    show_heatmap: bool = False
+    show_heatmap: bool = False,
 ):
     """
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
@@ -118,13 +119,14 @@ def create_schools_map_streamlit(
             df_schools_to_display=df_schools_to_display,
             class_count_per_school=class_count_per_school,
             filtered_class_details_per_school=filtered_class_details_per_school,
-            school_summary_from_filtered=school_summary_from_filtered
+            school_summary_from_filtered=school_summary_from_filtered,
         )
 
     if show_heatmap and not df_schools_to_display.empty:
         heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
         HeatMap(heat_data, name="HeatMap").add_to(m)
     return m
+
 
 @st.cache_data
 def get_unique_school_names(df_schools):
@@ -147,18 +149,21 @@ def load_all_data(excel_file: Path) -> tuple[pd.DataFrame | None, pd.DataFrame |
     df_classes = load_classes_data(excel_file)
     return df_schools, df_classes
 
+
 def main():
     st.title("🏫 Mapa szkół średnich - Warszawa i okolice (2025)")
-    st.markdown("""
+    st.markdown(
+        """
     Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
-    """)
-    
+    """
+    )
+
     # Initialize session state for filters if not already set
     # Używamy globalnego FILTER_DEFAULTS
     for key, value in FILTER_DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = value
-            
+
     latest_excel_file = get_latest_xls_file(RESULTS_DIR, DATA_PATTERN)
     if not latest_excel_file:
         st.error("Nie można wygenerować mapy bez pliku danych.")
@@ -168,17 +173,23 @@ def main():
     df_schools_raw, df_classes_raw = load_all_data(latest_excel_file)
 
     if df_schools_raw is None or df_classes_raw is None:
-        st.error("Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana.")
+        st.error(
+            "Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana."
+        )
         return
-    
+
     # prezentujemy nazwę tylko przy lokalnym uruchomieniu
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
     if "_SL" not in latest_excel_file.name:
         st.write(f"Załadowano dane z pliku: **{latest_excel_file.name}**")
-    
+
     available_subjects = get_subjects_from_dataframe(df_classes_raw)
-    available_class_types = sorted(df_classes_raw["TypOddzialu"].dropna().unique()) if "TypOddzialu" in df_classes_raw.columns else []
-    
+    available_class_types = (
+        sorted(df_classes_raw["TypOddzialu"].dropna().unique())
+        if "TypOddzialu" in df_classes_raw.columns
+        else []
+    )
+
     with st.sidebar:
         st.header("Filtry")
 
@@ -195,7 +206,6 @@ def main():
                     elif key_to_clear in ["ranking_top", "points_range"]:
                         del st.session_state[key_to_clear]
             st.rerun()
-
 
         st.subheader("Typ szkoły")
         school_type_options = ["liceum", "technikum", "branżowa"]
@@ -227,13 +237,17 @@ def main():
         st.subheader("Nazwa szkoły")
         # Lista nazw szkół zależy od wybranych typów
         if selected_school_types:
-            df_for_names = df_schools_raw[df_schools_raw["TypSzkoly"].isin(selected_school_types)]
+            df_for_names = df_schools_raw[
+                df_schools_raw["TypSzkoly"].isin(selected_school_types)
+            ]
         else:
             df_for_names = df_schools_raw
 
         # Dodatkowe ograniczenie listy nazw na podstawie rankingu (TOP)
         if max_ranking_poz_filter is not None and "RankingPoz" in df_for_names.columns:
-            df_for_names = df_for_names[df_for_names["RankingPoz"] <= max_ranking_poz_filter]
+            df_for_names = df_for_names[
+                df_for_names["RankingPoz"] <= max_ranking_poz_filter
+            ]
 
         school_names = get_unique_school_names(df_for_names)
         selected_school_names = st.multiselect(
@@ -262,7 +276,7 @@ def main():
             key="wanted_subjects",
             help=FILTER_HELPS["wanted_subjects"],
         )
-        
+
         st.markdown("**Unikane rozszerzenia**")
         avoided_subjects_filter = st.multiselect(
             FILTER_LABELS["avoided_subjects"],
@@ -271,7 +285,7 @@ def main():
             key="avoided_subjects",
             help=FILTER_HELPS["avoided_subjects"],
         )
-        
+
         st.subheader("Progi punktowe szkoły")
         # checkbox, domyślnie False – filtr wyłączony
         use_points_filter = st.checkbox(
@@ -280,10 +294,18 @@ def main():
             help=FILTER_HELPS["points_filter"],
         )
         if use_points_filter:
-            min_pts = df_classes_raw["Prog_min_szkola"].min() \
-                if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 100.0
-            max_pts_raw = df_classes_raw["Prog_min_szkola"].max() \
-                if "Prog_min_szkola" in df_classes_raw.columns and not df_classes_raw["Prog_min_szkola"].empty else 200.0
+            min_pts = (
+                df_classes_raw["Prog_min_szkola"].min()
+                if "Prog_min_szkola" in df_classes_raw.columns
+                and not df_classes_raw["Prog_min_szkola"].empty
+                else 100.0
+            )
+            max_pts_raw = (
+                df_classes_raw["Prog_min_szkola"].max()
+                if "Prog_min_szkola" in df_classes_raw.columns
+                and not df_classes_raw["Prog_min_szkola"].empty
+                else 200.0
+            )
             default_max = min(max_pts_raw, 300.0)
 
             points_range = st.slider(
@@ -307,7 +329,7 @@ def main():
             key="show_heatmap",
             help=FILTER_HELPS["show_heatmap"],
         )
-        
+
         st.subheader("Wykresy")
         show_histogram = st.checkbox(
             FILTER_LABELS["histogram"],
@@ -334,18 +356,26 @@ def main():
             key="bubble_commute",
             help=FILTER_HELPS["bubble_commute"],
         )
-        
+
     # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
     if selected_school_types:
-        df_classes_by_type = df_classes_raw[df_classes_raw["TypSzkoly"].isin(selected_school_types)]
-        df_schools_by_type = df_schools_raw[df_schools_raw["TypSzkoly"].isin(selected_school_types)]
+        df_classes_by_type = df_classes_raw[
+            df_classes_raw["TypSzkoly"].isin(selected_school_types)
+        ]
+        df_schools_by_type = df_schools_raw[
+            df_schools_raw["TypSzkoly"].isin(selected_school_types)
+        ]
     else:
         df_classes_by_type = df_classes_raw
         df_schools_by_type = df_schools_raw
 
     if selected_school_names:
-        df_classes_by_type = df_classes_by_type[df_classes_by_type["NazwaSzkoly"].isin(selected_school_names)]
-        df_schools_by_type = df_schools_by_type[df_schools_by_type["NazwaSzkoly"].isin(selected_school_names)]
+        df_classes_by_type = df_classes_by_type[
+            df_classes_by_type["NazwaSzkoly"].isin(selected_school_names)
+        ]
+        df_schools_by_type = df_schools_by_type[
+            df_schools_by_type["NazwaSzkoly"].isin(selected_school_names)
+        ]
 
     df_filtered_classes = apply_filters_to_classes(
         df_classes_by_type,
@@ -355,30 +385,36 @@ def main():
         min_class_points=min_class_points_filter,
         max_class_points=max_class_points_filter,
         allowed_class_types=selected_class_types,
-        report_warning_callback=st.warning
+        report_warning_callback=st.warning,
     )
 
-    any_filters_active = any([
-        wanted_subjects_filter,
-        avoided_subjects_filter,
-        max_ranking_poz_filter is not None,
-        min_class_points_filter is not None,
-        max_class_points_filter is not None,
-        bool(selected_school_types),
-        bool(selected_class_types),
-        bool(selected_school_names)
-    ])
+    any_filters_active = any(
+        [
+            wanted_subjects_filter,
+            avoided_subjects_filter,
+            max_ranking_poz_filter is not None,
+            min_class_points_filter is not None,
+            max_class_points_filter is not None,
+            bool(selected_school_types),
+            bool(selected_class_types),
+            bool(selected_school_names),
+        ]
+    )
 
     if df_filtered_classes.empty and any_filters_active:
         st.warning("Żadne klasy nie spełniają podanych kryteriów filtrowania.")
     elif df_filtered_classes.empty and not df_classes_raw.empty:
-         st.warning("Brak klas w danych wejściowych lub wszystkie zostały odfiltrowane.")
+        st.warning("Brak klas w danych wejściowych lub wszystkie zostały odfiltrowane.")
 
+    (
+        df_schools_to_display,
+        count_filtered_classes,
+        detailed_filtered_classes_info,
+        school_summary_from_filtered,
+    ) = aggregate_filtered_class_data(
+        df_filtered_classes, df_schools_by_type, any_filters_active
+    )
 
-    df_schools_to_display, count_filtered_classes, \
-    detailed_filtered_classes_info, school_summary_from_filtered = \
-        aggregate_filtered_class_data(df_filtered_classes, df_schools_by_type, any_filters_active)
-    
     filter_entries = []
     if selected_school_types:
         filter_entries.append(("Typ szkoły", ", ".join(selected_school_types)))
@@ -387,19 +423,29 @@ def main():
     if selected_school_names:
         filter_entries.append(("Wybrane szkoły", ", ".join(selected_school_names)))
     if wanted_subjects_filter:
-        filter_entries.append(("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter)))
+        filter_entries.append(
+            ("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter))
+        )
     if avoided_subjects_filter:
-        filter_entries.append(("Rozszerzenia - unikane", ", ".join(avoided_subjects_filter)))
+        filter_entries.append(
+            ("Rozszerzenia - unikane", ", ".join(avoided_subjects_filter))
+        )
     if max_ranking_poz_filter is not None:
         filter_entries.append(("Ranking TOP", max_ranking_poz_filter))
     if min_class_points_filter is not None:
-        filter_entries.append(("Minimalny próg punktowy klasy", min_class_points_filter))
+        filter_entries.append(
+            ("Minimalny próg punktowy klasy", min_class_points_filter)
+        )
     if max_class_points_filter is not None:
-        filter_entries.append(("Maksymalny próg punktowy klasy", max_class_points_filter))
+        filter_entries.append(
+            ("Maksymalny próg punktowy klasy", max_class_points_filter)
+        )
 
     filters_info_html = ""
     if filter_entries:
-        active_filters_list = [f"<b>{label}:</b> {value}" for label, value in filter_entries]
+        active_filters_list = [
+            f"<b>{label}:</b> {value}" for label, value in filter_entries
+        ]
         filters_info_html = "<br>".join(active_filters_list)
         st.markdown(
             f"""
@@ -408,7 +454,7 @@ def main():
                 {filters_info_html}
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     map_object = create_schools_map_streamlit(
@@ -416,33 +462,39 @@ def main():
         class_count_per_school=count_filtered_classes,
         filtered_class_details_per_school=detailed_filtered_classes_info,
         school_summary_from_filtered=school_summary_from_filtered,
-        show_heatmap=show_heatmap
+        show_heatmap=show_heatmap,
     )
 
     if not df_schools_to_display.empty:
-            total_schools = len(df_schools_raw)
-            total_classes = len(df_classes_raw)
-            matching_schools = len(df_schools_to_display)
-            matching_classes = sum(count_filtered_classes.values()) if count_filtered_classes else 0
+        total_schools = len(df_schools_raw)
+        total_classes = len(df_classes_raw)
+        matching_schools = len(df_schools_to_display)
+        matching_classes = (
+            sum(count_filtered_classes.values()) if count_filtered_classes else 0
+        )
 
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("**Szkoły**", f"{matching_schools} / {total_schools}")
-            with col2:
-                st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
-            with col3:
-                avg_points = None
-                if not df_filtered_classes.empty:
-                    serie = df_filtered_classes.apply(
-                        lambda r: r["Prog_min_klasa"] if pd.notna(r["Prog_min_klasa"]) else r["Prog_min_szkola"],
-                        axis=1,
-                    )
-                    avg_points = serie.mean()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("**Szkoły**", f"{matching_schools} / {total_schools}")
+        with col2:
+            st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
+        with col3:
+            avg_points = None
+            if not df_filtered_classes.empty:
+                serie = df_filtered_classes.apply(
+                    lambda r: (
+                        r["Prog_min_klasa"]
+                        if pd.notna(r["Prog_min_klasa"])
+                        else r["Prog_min_szkola"]
+                    ),
+                    axis=1,
+                )
+                avg_points = serie.mean()
 
-                if avg_points is not None:
-                    st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
-                else:
-                    st.metric("**Średni próg (pasujące klasy)**", "N/A")
+            if avg_points is not None:
+                st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
+            else:
+                st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
     tab_map, tab_viz = st.tabs(["🗺️Mapa", "📊Wizualizacje"])
 
@@ -455,7 +507,9 @@ def main():
             with pd.ExcelWriter(buf, engine="openpyxl") as writer:
                 df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
                 if filter_entries:
-                    filters_df = pd.DataFrame(filter_entries, columns=["Filtr", "Wartość"])
+                    filters_df = pd.DataFrame(
+                        filter_entries, columns=["Filtr", "Wartość"]
+                    )
                     filters_df.to_excel(writer, index=False, sheet_name="Parametry")
             buf.seek(0)
             st.download_button(
@@ -473,8 +527,13 @@ def main():
                     class_count = count_filtered_classes.get(szk_id, 0)
 
                     min_threshold_from_filtered_classes = None
-                    if szk_id in school_summary_from_filtered and 'Prog_min_szkola' in school_summary_from_filtered[szk_id]:
-                        min_threshold_from_filtered_classes = school_summary_from_filtered[szk_id]['Prog_min_szkola']
+                    if (
+                        szk_id in school_summary_from_filtered
+                        and "Prog_min_szkola" in school_summary_from_filtered[szk_id]
+                    ):
+                        min_threshold_from_filtered_classes = (
+                            school_summary_from_filtered[szk_id]["Prog_min_szkola"]
+                        )
                     elif szk_id in detailed_filtered_classes_info:
                         thresholds = [
                             class_info.get("min_pkt_klasy")
@@ -486,23 +545,36 @@ def main():
 
                     display_ranking = school_row.get("RankingPoz")
                     if pd.notna(display_ranking):
-                        display_ranking = int(display_ranking) if display_ranking == display_ranking // 1 else float(display_ranking)
+                        display_ranking = (
+                            int(display_ranking)
+                            if display_ranking == display_ranking // 1
+                            else float(display_ranking)
+                        )
                     else:
                         display_ranking = None
 
-                    schools_summary_list.append({
-                        "Nazwa szkoły": school_row["NazwaSzkoly"],
-                        "Dzielnica": school_row["Dzielnica"],
-                        "Ranking": display_ranking,
-                        "Liczba pasujących klas": class_count,
-                        "Min. próg pkt. (z pasujących klas)": min_threshold_from_filtered_classes if pd.notna(min_threshold_from_filtered_classes) else None,
-                    })
+                    schools_summary_list.append(
+                        {
+                            "Nazwa szkoły": school_row["NazwaSzkoly"],
+                            "Dzielnica": school_row["Dzielnica"],
+                            "Ranking": display_ranking,
+                            "Liczba pasujących klas": class_count,
+                            "Min. próg pkt. (z pasujących klas)": (
+                                min_threshold_from_filtered_classes
+                                if pd.notna(min_threshold_from_filtered_classes)
+                                else None
+                            ),
+                        }
+                    )
 
                 schools_summary_df = pd.DataFrame(schools_summary_list)
 
                 if "Min. próg pkt. (z pasujących klas)" in schools_summary_df.columns:
-                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = pd.to_numeric(
-                        schools_summary_df["Min. próg pkt. (z pasujących klas)"], errors="coerce"
+                    schools_summary_df["Min. próg pkt. (z pasujących klas)"] = (
+                        pd.to_numeric(
+                            schools_summary_df["Min. próg pkt. (z pasujących klas)"],
+                            errors="coerce",
+                        )
                     )
 
                 if "Ranking" in schools_summary_df.columns:
@@ -517,31 +589,44 @@ def main():
             fig = plots.histogram_threshold_distribution(df_filtered_classes)
             if fig:
                 st.pyplot(fig)
-                st.caption("Rozkład minimalnych progów punktowych w klasach. Przerywana linia oznacza średnią wartości.")
+                st.caption(
+                    "Rozkład minimalnych progów punktowych w klasach. Przerywana linia oznacza średnią wartości."
+                )
 
         if show_bar_district:
-            fig = plots.bar_classes_per_district(df_filtered_classes, df_schools_to_display)
+            fig = plots.bar_classes_per_district(
+                df_filtered_classes, df_schools_to_display
+            )
             if fig:
                 st.pyplot(fig)
-                st.caption("Liczba klas licealnych w poszczególnych dzielnicach. Dłuższy słupek to więcej klas.")
+                st.caption(
+                    "Liczba klas licealnych w poszczególnych dzielnicach. Dłuższy słupek to więcej klas."
+                )
 
         if show_scatter_rank:
             fig = plots.scatter_rank_vs_threshold(df_schools_to_display)
             if fig:
                 st.pyplot(fig)
-                st.caption("Zależność pozycji w rankingu od minimalnego progu punktowego. Linia trendu pokazuje ogólną korelację.")
+                st.caption(
+                    "Zależność pozycji w rankingu od minimalnego progu punktowego. Linia trendu pokazuje ogólną korelację."
+                )
 
         if show_cooccurrence:
             fig = plots.heatmap_subject_cooccurrence(df_filtered_classes)
             if fig:
                 st.pyplot(fig)
-                st.caption("Im intensywniejszy kolor, tym częściej dane przedmioty występują razem.")
+                st.caption(
+                    "Im intensywniejszy kolor, tym częściej dane przedmioty występują razem."
+                )
 
         if show_bubble_commute:
             fig = plots.bubble_prog_vs_dojazd(df_schools_to_display)
             if fig:
                 st.pyplot(fig)
-                st.caption("Czas dojazdu a próg punktowy szkoły. Wielkość bąbelka zależy od miejsca w rankingu, kolor od dzielnicy.")
+                st.caption(
+                    "Czas dojazdu a próg punktowy szkoły. Wielkość bąbelka zależy od miejsca w rankingu, kolor od dzielnicy."
+                )
+
 
 if __name__ == "__main__":
     main()
@@ -555,5 +640,5 @@ st.markdown(
         </a>
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )

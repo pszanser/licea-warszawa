@@ -1,7 +1,16 @@
 import time
 import datetime
 
-def get_travel_time(gmaps, origin_address, destination_address, mode="transit", language="pl", sleep_s=0.2, departure_time=None):
+
+def get_travel_time(
+    gmaps,
+    origin_address,
+    destination_address,
+    mode="transit",
+    language="pl",
+    sleep_s=0.2,
+    departure_time=None,
+):
     """
     Zwraca czas dojazdu w minutach lub None, jeżeli coś nie pykło.
     Parametr gmaps to instancja klienta Google Maps API utworzona wcześniej.
@@ -11,7 +20,7 @@ def get_travel_time(gmaps, origin_address, destination_address, mode="transit", 
             "origins": [origin_address],
             "destinations": [destination_address],
             "mode": mode,
-            "language": language
+            "language": language,
         }
         if departure_time is not None:
             kwargs["departure_time"] = departure_time
@@ -22,7 +31,8 @@ def get_travel_time(gmaps, origin_address, destination_address, mode="transit", 
         return duration_min
     except:
         return None
-    
+
+
 def get_next_weekday_time(hour=7, minute=30):
     # Znajdź najbliższy dzień powszedni (pon-pt) od dziś
     today = datetime.date.today()
@@ -42,7 +52,15 @@ def get_next_weekday_time(hour=7, minute=30):
     dt = datetime.datetime.combine(next_weekday, datetime.time(hour, minute))
     return int(dt.timestamp())
 
-def get_travel_times_batch(gmaps, origin_address, destination_addresses, mode="transit", language="pl", departure_time=None):
+
+def get_travel_times_batch(
+    gmaps,
+    origin_address,
+    destination_addresses,
+    mode="transit",
+    language="pl",
+    departure_time=None,
+):
     """
     Zwraca słownik {adres: czas_dojazdu} z czasami dojazdu w minutach dla wielu miejsc docelowych.
     Parametr gmaps to instancja klienta Google Maps API utworzona wcześniej.
@@ -53,7 +71,7 @@ def get_travel_times_batch(gmaps, origin_address, destination_addresses, mode="t
             "origins": [origin_address],
             "destinations": destination_addresses,
             "mode": mode,
-            "language": language
+            "language": language,
         }
         if departure_time is not None:
             kwargs["departure_time"] = departure_time
@@ -76,21 +94,22 @@ def get_travel_times_batch(gmaps, origin_address, destination_addresses, mode="t
         # W razie błędu zwróć słownik z None dla wszystkich adresów
         return {addr: None for addr in destination_addresses}
 
+
 def get_coordinates_for_addresses_batch(gmaps, addresses, batch_size=25):
     """
     Zwraca słownik {adres: (szerokość, długość)} dla listy adresów,
     przetwarzając wiele adresów jednocześnie dla przyspieszenia działania.
-    
+
     Parametry:
     - gmaps: instancja klienta Google Maps API
     - addresses: lista adresów do geokodowania
     - batch_size: maksymalna liczba adresów w jednej porcji (Google Maps ma limity)
     """
     coordinates_dict = {}
-    
+
     # Przetwarzaj adresy w porcjach
     for i in range(0, len(addresses), batch_size):
-        batch_addresses = addresses[i:i + batch_size]
+        batch_addresses = addresses[i : i + batch_size]
         try:
             # Wykonaj jedno zapytanie dla wielu adresów
             geocode_results = []
@@ -99,7 +118,7 @@ def get_coordinates_for_addresses_batch(gmaps, addresses, batch_size=25):
                 # Ale możemy zoptymalizować wydajność eliminując opóźnienie między wywołaniami
                 result = gmaps.geocode(address)
                 geocode_results.append((address, result))
-            
+
             # Przetwórz wyniki
             for address, result in geocode_results:
                 if result and len(result) > 0:
@@ -108,14 +127,14 @@ def get_coordinates_for_addresses_batch(gmaps, addresses, batch_size=25):
                     coordinates_dict[address] = (lat, lng)
                 else:
                     coordinates_dict[address] = (None, None)
-                    
+
         except Exception as e:
             print(f"Błąd podczas przetwarzania porcji adresów: {e}")
             # W przypadku błędu ustaw None dla wszystkich adresów w tej porcji
             for address in batch_addresses:
                 coordinates_dict[address] = (None, None)
-                
+
         # Dodaj małe opóźnienie między porcjami, aby nie przekroczyć limitów API
         time.sleep(0.5)
-        
+
     return coordinates_dict
