@@ -1,6 +1,6 @@
 # Przewodnik dla Agentów - Licea Warszawa
 
-**Cel tego dokumentu:** Ten plik (`AGENTS.MD`) służy jako Twój główny przewodnik do pracy w tym repozytorium. Zawiera kluczowe informacje o strukturze projektu, konfiguracji środowiska, standardach kodowania, testowaniu i sposobie prezentowania wyników Twojej pracy. Przestrzegaj go uważnie, aby Twoje zmiany były spójne i wysokiej jakości.
+**Cel tego dokumentu:** Ten plik (`AGENTS.md`) służy jako Twój główny przewodnik do pracy w tym repozytorium. Zawiera kluczowe informacje o strukturze projektu, konfiguracji środowiska, standardach kodowania, testowaniu i sposobie prezentowania wyników Twojej pracy. Przestrzegaj go uważnie, aby Twoje zmiany były spójne i wysokiej jakości.
 
 ## Przegląd Projektu
 Ten projekt analizuje licea, technika i szkoły branżowe w Warszawie i okolicach. Integruje dane z systemu Vulcan, ranking Perspektyw, progi punktowe oraz czasy dojazdu z Google Maps API. Głównym produktem jest interaktywna aplikacja Streamlit z mapą i wizualizacjami.
