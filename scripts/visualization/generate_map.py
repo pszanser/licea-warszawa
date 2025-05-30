@@ -20,7 +20,8 @@ extract_class_type = main.extract_class_type
 RESULTS_DIR = ROOT / "results"
 DATA_PATTERN = "LO_Warszawa_2025_*.xlsx"
 MAP_OUTPUT_FILENAME = "mapa_licea_warszawa.html"
-WARSAW_CENTER_COORDS = [52.2297, 21.0122] # Współrzędne centrum Warszawy
+WARSAW_CENTER_COORDS = [52.2297, 21.0122]  # Współrzędne centrum Warszawy
+
 
 def get_latest_xls_file(directory: Path, pattern: str) -> Path | None:
     """
@@ -28,11 +29,14 @@ def get_latest_xls_file(directory: Path, pattern: str) -> Path | None:
     """
     files = list(directory.glob(pattern))
     if not files:
-        print(f"Nie znaleziono plików pasujących do wzorca '{pattern}' w '{directory}'.")
+        print(
+            f"Nie znaleziono plików pasujących do wzorca '{pattern}' w '{directory}'."
+        )
         return None
     latest_file = max(files, key=os.path.getmtime)
     print(f"Używam pliku danych: {latest_file}")
     return latest_file
+
 
 def load_school_data(excel_path: Path) -> pd.DataFrame | None:
     """
@@ -41,22 +45,33 @@ def load_school_data(excel_path: Path) -> pd.DataFrame | None:
     """
     try:
         df = pd.read_excel(excel_path, sheet_name="szkoly")
-        
-        required_cols = ["SzkolaLat", "SzkolaLon", "NazwaSzkoly", "AdresSzkoly", "Dzielnica", "url"]
-        
+
+        required_cols = [
+            "SzkolaLat",
+            "SzkolaLon",
+            "NazwaSzkoly",
+            "AdresSzkoly",
+            "Dzielnica",
+            "url",
+        ]
+
         for col in required_cols:
             if col not in df.columns:
-                print(f"Brak wymaganej kolumny '{col}' w arkuszu 'szkoly'. Nie można wygenerować mapy.")
+                print(
+                    f"Brak wymaganej kolumny '{col}' w arkuszu 'szkoly'. Nie można wygenerować mapy."
+                )
                 return None
-        
+
         df_filtered = df.dropna(subset=["SzkolaLat", "SzkolaLon"]).copy()
-        
+
         if df_filtered.empty:
-            print("Brak szkół z poprawnymi współrzędnymi w pliku. Mapa nie zostanie wygenerowana.")
+            print(
+                "Brak szkół z poprawnymi współrzędnymi w pliku. Mapa nie zostanie wygenerowana."
+            )
             return None
-            
+
         return df_filtered
-        
+
     except FileNotFoundError:
         print(f"Nie znaleziono pliku: {excel_path}")
         return None
@@ -66,6 +81,7 @@ def load_school_data(excel_path: Path) -> pd.DataFrame | None:
     except Exception as e:
         print(f"Niespodziewany błąd podczas wczytywania danych: {e}")
         return None
+
 
 def load_classes_data(excel_path: Path) -> pd.DataFrame | None:
     """
@@ -80,18 +96,33 @@ def load_classes_data(excel_path: Path) -> pd.DataFrame | None:
         print(f"Błąd podczas wczytywania arkusza 'klasy': {e}")
         return None
 
+
 def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
     """Wyciąga listę przedmiotów rozszerzonych z kolumn DataFrame"""
-    potential_subjects = [col for col in df.columns if col not in [
-        'SzkolaIdentyfikator', 'OddzialIdentyfikator', 'OddzialNazwa', 'UrlGrupy',
-        'Prog_min_klasa', 'Prog_min_szkola', 'Prog_max_szkola', 'RankingPoz',
-        'TypOddzialu'
-    ]]
+    potential_subjects = [
+        col
+        for col in df.columns
+        if col
+        not in [
+            "SzkolaIdentyfikator",
+            "OddzialIdentyfikator",
+            "OddzialNazwa",
+            "UrlGrupy",
+            "Prog_min_klasa",
+            "Prog_min_szkola",
+            "Prog_max_szkola",
+            "RankingPoz",
+            "TypOddzialu",
+        ]
+    ]
     subject_cols = []
     for col in potential_subjects:
-        if df[col].dtype in ['int64', 'float64'] and set(df[col].dropna().unique()).issubset({0, 1}):
+        if df[col].dtype in ["int64", "float64"] and set(
+            df[col].dropna().unique()
+        ).issubset({0, 1}):
             subject_cols.append(col)
     return sorted(subject_cols)
+
 
 def apply_filters_to_classes(
     df_classes_raw: pd.DataFrame,
@@ -101,7 +132,7 @@ def apply_filters_to_classes(
     min_class_points: float | None,
     max_class_points: float | None,
     allowed_class_types: list[str] | None = None,
-    report_warning_callback: Callable[[str], Any] = print
+    report_warning_callback: Callable[[str], Any] = print,
 ) -> pd.DataFrame:
     """
     Filtruje DataFrame klas na podstawie podanych kryteriów.
@@ -113,45 +144,66 @@ def apply_filters_to_classes(
             if subject in df_filtered.columns:
                 df_filtered = df_filtered[df_filtered[subject] == 1]
             else:
-                report_warning_callback(f"Kolumna wymaganego przedmiotu '{subject}' nie znaleziona w danych.")
-    
+                report_warning_callback(
+                    f"Kolumna wymaganego przedmiotu '{subject}' nie znaleziona w danych."
+                )
+
     if avoided_subjects:
         for subject in avoided_subjects:
             if subject in df_filtered.columns:
                 df_filtered = df_filtered[df_filtered[subject] != 1]
             else:
-                report_warning_callback(f"Kolumna unikanego przedmiotu '{subject}' nie znaleziona w danych.")
+                report_warning_callback(
+                    f"Kolumna unikanego przedmiotu '{subject}' nie znaleziona w danych."
+                )
 
     if max_ranking_poz is not None:
         if "RankingPoz" in df_filtered.columns:
             df_filtered = df_filtered[df_filtered["RankingPoz"] <= max_ranking_poz]
         else:
-            report_warning_callback("Kolumna 'RankingPoz' nie znaleziona w danych do filtrowania rankingu.")
+            report_warning_callback(
+                "Kolumna 'RankingPoz' nie znaleziona w danych do filtrowania rankingu."
+            )
 
     if min_class_points is not None:
         if "Prog_min_szkola" in df_filtered.columns:
-            df_filtered = df_filtered[df_filtered["Prog_min_szkola"] >= min_class_points]
+            df_filtered = df_filtered[
+                df_filtered["Prog_min_szkola"] >= min_class_points
+            ]
         else:
-            report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu min.")
-    
+            report_warning_callback(
+                "Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu min."
+            )
+
     if max_class_points is not None:
-        if "Prog_min_szkola" in df_filtered.columns: # Filtrujemy na podstawie progu minimalnego klasy
-            df_filtered = df_filtered[df_filtered["Prog_min_szkola"] <= max_class_points]
+        if (
+            "Prog_min_szkola" in df_filtered.columns
+        ):  # Filtrujemy na podstawie progu minimalnego klasy
+            df_filtered = df_filtered[
+                df_filtered["Prog_min_szkola"] <= max_class_points
+            ]
         else:
-            report_warning_callback("Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu max.")
+            report_warning_callback(
+                "Kolumna 'Prog_min_szkola' nie znaleziona w danych do filtrowania progu max."
+            )
 
     if allowed_class_types:
         if "TypOddzialu" in df_filtered.columns:
-            df_filtered = df_filtered[df_filtered["TypOddzialu"].isin(allowed_class_types)]
+            df_filtered = df_filtered[
+                df_filtered["TypOddzialu"].isin(allowed_class_types)
+            ]
         else:
-            report_warning_callback("Kolumna 'TypOddzialu' nie znaleziona w danych do filtrowania typu oddziału.")
+            report_warning_callback(
+                "Kolumna 'TypOddzialu' nie znaleziona w danych do filtrowania typu oddziału."
+            )
 
     return df_filtered
+
 
 def aggregate_filtered_class_data(
     df_filtered_classes: pd.DataFrame,
     df_schools_raw: pd.DataFrame,
-    any_filters_applied: bool
+    any_filters_applied: bool,
 ) -> tuple[pd.DataFrame, dict, dict, dict]:
     """
     Agreguje dane po filtrowaniu klas, przygotowując dane do wyświetlenia na mapie.
@@ -162,60 +214,83 @@ def aggregate_filtered_class_data(
         count_filtered_classes = {}
         detailed_filtered_classes_info = {}
         school_summary_from_filtered = {}
-    elif df_filtered_classes.empty: # No filters applied, but no classes data
+    elif df_filtered_classes.empty:  # No filters applied, but no classes data
         # print("Brak klas w danych wejściowych.")
         df_schools_to_display = pd.DataFrame(columns=df_schools_raw.columns)
         count_filtered_classes = {}
         detailed_filtered_classes_info = {}
         school_summary_from_filtered = {}
     else:
-        schools_with_matching_classes_ids = df_filtered_classes["SzkolaIdentyfikator"].unique()
-        df_schools_to_display = df_schools_raw[df_schools_raw["SzkolaIdentyfikator"].isin(schools_with_matching_classes_ids)].copy()
+        schools_with_matching_classes_ids = df_filtered_classes[
+            "SzkolaIdentyfikator"
+        ].unique()
+        df_schools_to_display = df_schools_raw[
+            df_schools_raw["SzkolaIdentyfikator"].isin(
+                schools_with_matching_classes_ids
+            )
+        ].copy()
 
-        count_filtered_classes = df_filtered_classes.groupby("SzkolaIdentyfikator").size().to_dict()
-        
+        count_filtered_classes = (
+            df_filtered_classes.groupby("SzkolaIdentyfikator").size().to_dict()
+        )
+
         detailed_filtered_classes_info = {}
         for szk_id, group in df_filtered_classes.groupby("SzkolaIdentyfikator"):
             details = []
             for _, class_row in group.iterrows():
-                details.append({
-                    "nazwa": class_row.get("OddzialNazwa"),
-                    "url": class_row.get("UrlGrupy"),
-                    "min_pkt_klasy": class_row.get("Prog_min_klasa"),
-                })
+                details.append(
+                    {
+                        "nazwa": class_row.get("OddzialNazwa"),
+                        "url": class_row.get("UrlGrupy"),
+                        "min_pkt_klasy": class_row.get("Prog_min_klasa"),
+                    }
+                )
             detailed_filtered_classes_info[szk_id] = details
 
         school_summary_from_filtered = {}
         # Ensure all expected columns for aggregation are present
-        required_agg_cols = ["SzkolaIdentyfikator", "Prog_min_szkola", "Prog_max_szkola", "RankingPoz"]
+        required_agg_cols = [
+            "SzkolaIdentyfikator",
+            "Prog_min_szkola",
+            "Prog_max_szkola",
+            "RankingPoz",
+        ]
         if all(col in df_filtered_classes.columns for col in required_agg_cols):
             agg_dict = {
-                "Prog_min_szkola": "min", # Min próg szkoły z pasujących klas
-                "Prog_max_szkola": "max", # Max próg szkoły (faktycznie klasy) z pasujących klas
-                "RankingPoz": "first"      # Ranking szkoły (jest taki sam dla wszystkich jej klas)
+                "Prog_min_szkola": "min",  # Min próg szkoły z pasujących klas
+                "Prog_max_szkola": "max",  # Max próg szkoły (faktycznie klasy) z pasujących klas
+                "RankingPoz": "first",  # Ranking szkoły (jest taki sam dla wszystkich jej klas)
             }
             # Drop rows where any of the aggregation keys might be NaN before grouping
             # to avoid issues with groupby if these columns are not fully populated
             # However, typically SzkolaIdentyfikator should always be present.
             # For Prog_min_szkola, Prog_max_szkola, RankingPoz, they might be NaN for some classes.
             # The aggregation functions (min, max, first) handle NaNs appropriately by default.
-            
-            grouped_for_summary = df_filtered_classes.groupby("SzkolaIdentyfikator").agg(agg_dict)
-            school_summary_from_filtered = grouped_for_summary.to_dict('index')
+
+            grouped_for_summary = df_filtered_classes.groupby(
+                "SzkolaIdentyfikator"
+            ).agg(agg_dict)
+            school_summary_from_filtered = grouped_for_summary.to_dict("index")
         else:
             # print("Ostrzeżenie: Brak wszystkich wymaganych kolumn do agregacji podsumowania szkoły z przefiltrowanych klas.")
             # This will result in school_summary_from_filtered remaining empty or partially filled if some columns were present.
             # Fallback can be to use original school data if filtered summary is not possible.
             pass
-            
-    return df_schools_to_display, count_filtered_classes, detailed_filtered_classes_info, school_summary_from_filtered
+
+    return (
+        df_schools_to_display,
+        count_filtered_classes,
+        detailed_filtered_classes_info,
+        school_summary_from_filtered,
+    )
+
 
 def add_school_markers_to_map(
     folium_map_object: folium.Map,
     df_schools_to_display: pd.DataFrame,
     class_count_per_school: dict[str, int],
     filtered_class_details_per_school: dict[str, list[dict]],
-    school_summary_from_filtered: dict[str, dict]
+    school_summary_from_filtered: dict[str, dict],
 ) -> None:
     """
     Dodaje markery szkół do obiektu mapy Folium.
@@ -245,30 +320,38 @@ def add_school_markers_to_map(
         summary = school_summary_from_filtered.get(szk_id, {})
 
         # Użyj rankingu z podsumowania przefiltrowanych klas, jeśli dostępne, inaczej z danych ogólnych szkoły
-        ranking_poz = summary.get('RankingPoz', row.get('RankingPoz'))
+        ranking_poz = summary.get("RankingPoz", row.get("RankingPoz"))
         if pd.notna(ranking_poz):
-            display_ranking = int(ranking_poz) if ranking_poz == ranking_poz // 1 else ranking_poz
+            display_ranking = (
+                int(ranking_poz) if ranking_poz == ranking_poz // 1 else ranking_poz
+            )
             popup_html += f"Ranking Perspektywy 2025: {display_ranking}<br>"
-        
+
         # Progi punktowe z przefiltrowanych klas
-        min_prog_filtered = summary.get('Prog_min_szkola')
-        max_prog_filtered = summary.get('Prog_max_szkola')
-        
+        min_prog_filtered = summary.get("Prog_min_szkola")
+        max_prog_filtered = summary.get("Prog_max_szkola")
+
         if pd.notna(min_prog_filtered) and pd.notna(max_prog_filtered):
             popup_html += f"Przedział pkt. szkoły (dla filtr. klas) 2024: {(min_prog_filtered)}–{(max_prog_filtered)}<br>"
         else:
             # Jeśli brak danych z przefiltrowanych, użyj ogólnych progów szkoły
-            min_prog_general = row.get('Prog_min_szkola')
-            max_prog_general = row.get('Prog_max_szkola')
+            min_prog_general = row.get("Prog_min_szkola")
+            max_prog_general = row.get("Prog_max_szkola")
             if pd.notna(min_prog_general) and pd.notna(max_prog_general):
-                if min_prog_general == max_prog_general: # np. gdy tylko jedna klasa lub wszystkie mają ten sam próg
-                    popup_html += f"Próg punktowy szkoły (ogólny) 2024: {(min_prog_general)}<br>"
+                if (
+                    min_prog_general == max_prog_general
+                ):  # np. gdy tylko jedna klasa lub wszystkie mają ten sam próg
+                    popup_html += (
+                        f"Próg punktowy szkoły (ogólny) 2024: {(min_prog_general)}<br>"
+                    )
                 else:
                     popup_html += f"Przedział pkt. szkoły (ogólny) 2024: {(min_prog_general)}–{(max_prog_general)}<br>"
 
         num_matching_classes = class_count_per_school.get(szk_id, 0)
         if num_matching_classes > 0:
-            popup_html += f"Liczba klas spełniających kryteria: {num_matching_classes}<br>"
+            popup_html += (
+                f"Liczba klas spełniających kryteria: {num_matching_classes}<br>"
+            )
 
         matching_classes_details = filtered_class_details_per_school.get(szk_id, [])
         if matching_classes_details:
@@ -283,12 +366,12 @@ def add_school_markers_to_map(
                     line += f"<a href='{class_url}' target='_blank'>{class_name}</a>"
                 else:
                     line += class_name
-                
+
                 if pd.notna(class_min_pkt):
                     line += f" (próg: {int(class_min_pkt) if class_min_pkt == class_min_pkt // 1 else class_min_pkt} pkt)"
                 popup_html += line + "<br>"
-        
-        if 'url' in row and pd.notna(row['url']):
+
+        if "url" in row and pd.notna(row["url"]):
             popup_html += f"<a href='{row['url']}' target='_blank'>Zobacz ofertę szkoły (ogólnie)</a>"
 
         popup_html = f"<div style='font-size:14px; line-height:1.2;'>{popup_html}</div>"
@@ -301,7 +384,7 @@ def add_school_markers_to_map(
             location=[row["SzkolaLat"], row["SzkolaLon"]],
             tooltip=tooltip_text,
             popup=folium.Popup(popup_html, max_width=350),
-            icon=folium.Icon(color=marker_color, icon="graduation-cap", prefix="fa")
+            icon=folium.Icon(color=marker_color, icon="graduation-cap", prefix="fa"),
         ).add_to(cluster)
 
 
@@ -327,7 +410,9 @@ def _add_heatmap_toggle(map_obj: folium.Map, heat_layer: HeatMap) -> None:
     </script>
     """
     from folium import Element
+
     map_obj.get_root().html.add_child(Element(button_html))
+
 
 def create_schools_map(
     df_schools_to_display: pd.DataFrame,
@@ -336,7 +421,7 @@ def create_schools_map(
     filtered_class_details_per_school: dict[str, list[dict]],
     school_summary_from_filtered: dict[str, dict],
     filters_info_html: str = "",
-    show_heatmap: bool = False
+    show_heatmap: bool = False,
 ) -> None:
     """
     Tworzy mapę Folium z lokalizacjami szkół i zapisuje ją do pliku HTML.
@@ -348,25 +433,26 @@ def create_schools_map(
     LocateControl().add_to(m)
 
     if filters_info_html:
-        legend_html = f'''
+        legend_html = f"""
         <div style="position: fixed; top: 60px; left: 60px; width: 320px; z-index:9999; background-color: white; border:2px solid grey; border-radius:8px; padding: 10px; font-size: 14px; box-shadow: 2px 2px 8px #888;">
             <b>Zastosowane filtry:</b><br>
             {filters_info_html}
         </div>
-        '''
+        """
         from folium import Element
+
         m.get_root().html.add_child(Element(legend_html))
 
     if df_schools_to_display.empty:
         print("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.")
         # Save empty map anyway
     else:
-         add_school_markers_to_map(
+        add_school_markers_to_map(
             m,
             df_schools_to_display,
             class_count_per_school,
             filtered_class_details_per_school,
-            school_summary_from_filtered
+            school_summary_from_filtered,
         )
 
     heat_layer = None
@@ -384,11 +470,11 @@ def create_schools_map(
 
 def main():
     print("Rozpoczynam generowanie mapy szkół...")
-    
+
     # --- Definicje filtrów (mogą być modyfikowane lub ustawione na None/puste listy) ---
-    wanted_subjects = [] # np. ["matematyka"]
-    avoided_subjects = [] # np. ["biologia"]
-    max_ranking_poz = None   # np. 50
+    wanted_subjects = []  # np. ["matematyka"]
+    avoided_subjects = []  # np. ["biologia"]
+    max_ranking_poz = None  # np. 50
     min_class_points = None  # np. 140.0
     max_class_points = None  # np. 180.0
     enable_heatmap = False
@@ -403,7 +489,9 @@ def main():
     df_classes_raw = load_classes_data(latest_excel_file)
 
     if df_schools_raw is None or df_classes_raw is None:
-        print("Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana.")
+        print(
+            "Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana."
+        )
         return
 
     df_filtered_classes = apply_filters_to_classes(
@@ -413,53 +501,75 @@ def main():
         max_ranking_poz,
         min_class_points,
         max_class_points,
-        report_warning_callback=lambda msg: print(f"Ostrzeżenie: {msg}")
+        report_warning_callback=lambda msg: print(f"Ostrzeżenie: {msg}"),
     )
-    
-    any_filters_applied = any([
-        wanted_subjects,
-        avoided_subjects,
-        max_ranking_poz is not None,
-        min_class_points is not None,
-        max_class_points is not None
-    ])
+
+    any_filters_applied = any(
+        [
+            wanted_subjects,
+            avoided_subjects,
+            max_ranking_poz is not None,
+            min_class_points is not None,
+            max_class_points is not None,
+        ]
+    )
 
     if df_filtered_classes.empty and any_filters_applied:
         print("Żadne klasy nie spełniają podanych kryteriów filtrowania.")
-    elif df_filtered_classes.empty and not any_filters_applied and not df_classes_raw.empty:
+    elif (
+        df_filtered_classes.empty
+        and not any_filters_applied
+        and not df_classes_raw.empty
+    ):
         # This case might mean all classes were filtered out by default logic in apply_filters if any,
         # or df_classes_raw was already empty (handled by initial check).
         # For now, assume it means no classes to display if df_filtered_classes is empty.
-        print("Brak klas do przetworzenia (prawdopodobnie wszystkie odfiltrowane lub brak danych).")
+        print(
+            "Brak klas do przetworzenia (prawdopodobnie wszystkie odfiltrowane lub brak danych)."
+        )
 
-
-    df_schools_to_display, count_filtered_classes, \
-    detailed_filtered_classes_info, school_summary_from_filtered = \
-        aggregate_filtered_class_data(df_filtered_classes, df_schools_raw, any_filters_applied)
+    (
+        df_schools_to_display,
+        count_filtered_classes,
+        detailed_filtered_classes_info,
+        school_summary_from_filtered,
+    ) = aggregate_filtered_class_data(
+        df_filtered_classes, df_schools_raw, any_filters_applied
+    )
 
     if df_schools_to_display.empty and any_filters_applied:
         print("Brak szkół do wyświetlenia po zastosowaniu filtrów.")
     elif df_schools_to_display.empty and not df_schools_raw.empty:
-         print("Brak szkół do wyświetlenia (żadne nie mają pasujących klas lub brak danych szkół).")
-
+        print(
+            "Brak szkół do wyświetlenia (żadne nie mają pasujących klas lub brak danych szkół)."
+        )
 
     filters_info_html_str = ""
     if any_filters_applied:
-        map_output_file = RESULTS_DIR / MAP_OUTPUT_FILENAME.replace('.html', '_filtered.html')
+        map_output_file = RESULTS_DIR / MAP_OUTPUT_FILENAME.replace(
+            ".html", "_filtered.html"
+        )
         if wanted_subjects:
-            filters_info_html_str += f"Rozszerzenia - poszukiwane: {', '.join(wanted_subjects)}<br>"
+            filters_info_html_str += (
+                f"Rozszerzenia - poszukiwane: {', '.join(wanted_subjects)}<br>"
+            )
         if avoided_subjects:
-            filters_info_html_str += f"Rozszerzenia - unikane: {', '.join(avoided_subjects)}<br>"
+            filters_info_html_str += (
+                f"Rozszerzenia - unikane: {', '.join(avoided_subjects)}<br>"
+            )
         if max_ranking_poz is not None:
             filters_info_html_str += f"Ranking TOP: {max_ranking_poz}<br>"
         if min_class_points is not None:
-            filters_info_html_str += f"Minimalny próg punktowy klasy: {min_class_points}<br>"
+            filters_info_html_str += (
+                f"Minimalny próg punktowy klasy: {min_class_points}<br>"
+            )
         if max_class_points is not None:
-            filters_info_html_str += f"Maksymalny próg punktowy klasy: {max_class_points}<br>"
+            filters_info_html_str += (
+                f"Maksymalny próg punktowy klasy: {max_class_points}<br>"
+            )
     else:
         map_output_file = RESULTS_DIR / MAP_OUTPUT_FILENAME
         filters_info_html_str = "Brak aktywnych filtrów.<br>"
-
 
     create_schools_map(
         df_schools_to_display=df_schools_to_display,
@@ -468,8 +578,9 @@ def main():
         filtered_class_details_per_school=detailed_filtered_classes_info,
         school_summary_from_filtered=school_summary_from_filtered,
         filters_info_html=filters_info_html_str if any_filters_applied else "",
-        show_heatmap=enable_heatmap
+        show_heatmap=enable_heatmap,
     )
+
 
 if __name__ == "__main__":
     main()
