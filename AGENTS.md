@@ -90,7 +90,6 @@ streamlit run scripts/visualization/streamlit_mapa_licea.py
 ### Struktura testów:
 - Testy znajdują się w katalogu `tests/`
 - Konfiguracja pytest w `pytest.ini`
-- Fixtures w `tests/fixtures/`
 - Testy nazywane według wzorca `test_*.py`
 
 ### Uruchamianie testów:
@@ -136,27 +135,38 @@ pytest -v
 
 ## Walidacja Zmian
 
-**Zanim zgłosisz swoje zmiany (np. w formie Pull Requestu), MUSISZ przeprowadzić następujące kroki walidacyjne:**
+**Zanim zgłosisz swoje zmiany (np. w formie Pull Requestu), jako agent MUSISZ przeprowadzić następujące kroki walidacyjne, aby upewnić się, że Twoje modyfikacje są poprawne i nie wprowadzają regresji:**
 
-1.  **Uruchom wszystkie testy**:
+1.  **Sformatuj kod:** Użyj skonfigurowanego formatera, aby zapewnić spójność stylu.
+    ```powershell
+    black .
+    ```
+2.  **Uruchom linter:** Sprawdź kod pod kątem błędów stylistycznych i potencjalnych problemów.
+    ```powershell
+    flake8 scripts tests
+    ```
+3.  **Sprawdź typy statyczne:** Jeśli projekt używa adnotacji typów, zweryfikuj ich poprawność.
+    ```powershell
+    mypy scripts
+    ```
+    Upewnij się, że nie ma nowych błędów typowania.
+4.  **Uruchom wszystkie testy jednostkowe i integracyjne:**
     ```powershell
     pytest
     ```
-    Upewnij się, że wszystkie testy zakończyły się sukcesem.
-2.  **Sprawdź główne przepływy pracy**: Uruchom kluczowe skrypty, aby zweryfikować ich działanie z Twoimi zmianami.
+    Wszystkie testy muszą zakończyć się sukcesem.
+5.  **Sprawdź główne przepływy pracy projektu:** Uruchom kluczowe skrypty, aby zweryfikować ich poprawne działanie z Twoimi zmianami.
     ```powershell
     python scripts/main.py
     python scripts/visualization/generate_visuals.py
     ```
-3.  **Przetestuj aplikację Streamlit** (jeśli Twoje zmiany mogły na nią wpłynąć):
+6.  **Przetestuj aplikację Streamlit** (jeśli Twoje zmiany mogły na nią wpłynąć):
     ```powershell
     streamlit run scripts/visualization/streamlit_mapa_licea.py
     ```
-    Sprawdź interakcję i poprawność wyświetlanych danych.
-4.  **Sprawdź jakość kodu**:
-    *   Uruchom skonfigurowane lintery (np. Flake8) i formattery (np. Black).
-    *   Jeśli nie są skonfigurowane, upewnij się, że Twój kod jest zgodny z PEP 8 i spójny z resztą projektu.
-    *   Popraw wszelkie zgłoszone błędy lub ostrzeżenia.
+    Sprawdź interakcję użytkownika i poprawność wyświetlanych danych w aplikacji.
+
+Upewnij się, że wszystkie powyższe kroki zostały wykonane i zakończyły się pomyślnie przed utworzeniem Pull Requestu lub zgłoszeniem zakończenia zadania.
 
 ### Walidacja Zmian
 Przed zgłoszeniem zmian, agent MUSI wykonać następujące kroki:
