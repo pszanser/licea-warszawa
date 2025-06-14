@@ -471,9 +471,7 @@ def main():
             </div>
             """,
             unsafe_allow_html=True,
-        )
-
-    # Sprawdź, czy jest lokalizacja użytkownika do zaznaczenia pinezką
+        )    # Sprawdź, czy jest lokalizacja użytkownika do zaznaczenia pinezką
     user_marker_location = None
     if "_user_location" in st.session_state:
         loc = st.session_state["_user_location"]
@@ -524,8 +522,11 @@ def main():
 
     with tab_map:
         st.subheader("Mapa szkół")
+        
+        # Wyświetl mapę i pobierz dane o interakcji
         loc_data = st_folium(
-            map_object, width=None, height=600, returned_objects=["last_clicked", "last_object_clicked", "location"]
+            map_object, width=None, height=600, 
+            returned_objects=["last_clicked", "last_object_clicked", "location"]
         )
 
         # Przechowuj ostatnią znaną lokalizację użytkownika w session_state
@@ -553,6 +554,8 @@ def main():
                 st.session_state["_user_location"] = user_location
                 lat = user_location["lat"]
                 lon = user_location["lng"]
+                
+                # Przeliczy najbliższe szkoły
                 nearest_df = geo.find_nearest_schools(
                     (
                         df_schools_to_display
@@ -564,6 +567,9 @@ def main():
                     top_n=5,
                 )
                 st.session_state["_nearest_schools"] = nearest_df
+                
+                # Wymuś odświeżenie, żeby mapa się przerysowała z nową pinezką
+                st.rerun()
 
         # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
         nearest_df = st.session_state.get("_nearest_schools")
