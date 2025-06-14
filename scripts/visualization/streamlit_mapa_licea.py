@@ -14,7 +14,13 @@ from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
 import numbers
 import io
-from scripts import geo
+# Zapewniamy, że katalog `scripts` (z plikiem geo.py) jest w sys.path
+_scripts_dir = Path(__file__).resolve().parent.parent
+if str(_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_scripts_dir))
+
+import importlib
+geo = importlib.import_module("geo")
 
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
@@ -103,6 +109,7 @@ def create_schools_map_streamlit(
     filtered_class_details_per_school: dict,
     school_summary_from_filtered: dict,
     show_heatmap: bool = False,
+    user_marker_location: tuple[float, float] | None = None,
 ):
     """
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
@@ -122,6 +129,14 @@ def create_schools_map_streamlit(
             filtered_class_details_per_school=filtered_class_details_per_school,
             school_summary_from_filtered=school_summary_from_filtered,
         )
+
+    # Dodaj pinezkę użytkownika, jeśli jest lokalizacja
+    if user_marker_location is not None:
+        folium.Marker(
+            location=user_marker_location,
+            icon=folium.Icon(color="red", icon="user", prefix="fa"),
+            popup="Twój punkt odniesienia"
+        ).add_to(m)
 
     if show_heatmap and not df_schools_to_display.empty:
         heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
@@ -458,12 +473,20 @@ def main():
             unsafe_allow_html=True,
         )
 
+    # Sprawdź, czy jest lokalizacja użytkownika do zaznaczenia pinezką
+    user_marker_location = None
+    if "_user_location" in st.session_state:
+        loc = st.session_state["_user_location"]
+        if loc and "lat" in loc and "lng" in loc:
+            user_marker_location = (loc["lat"], loc["lng"])
+
     map_object = create_schools_map_streamlit(
         df_schools_to_display=df_schools_to_display,
         class_count_per_school=count_filtered_classes,
         filtered_class_details_per_school=detailed_filtered_classes_info,
         school_summary_from_filtered=school_summary_from_filtered,
         show_heatmap=show_heatmap,
+        user_marker_location=user_marker_location,
     )
 
     if not df_schools_to_display.empty:
@@ -502,22 +525,49 @@ def main():
     with tab_map:
         st.subheader("Mapa szkół")
         loc_data = st_folium(
-            map_object, width=None, height=600, returned_objects=["last_clicked"]
+            map_object, width=None, height=600, returned_objects=["last_clicked", "last_object_clicked", "location"]
         )
 
-        if loc_data and loc_data.get("last_clicked"):
-            lat = loc_data["last_clicked"]["lat"]
-            lon = loc_data["last_clicked"]["lng"]
-            nearest_df = geo.find_nearest_schools(
-                (
-                    df_schools_to_display
-                    if not df_schools_to_display.empty
-                    else df_schools_raw
-                ),
-                lat,
-                lon,
-                top_n=5,
-            )
+        # Przechowuj ostatnią znaną lokalizację użytkownika w session_state
+        def get_new_user_location(loc_data):
+            if not loc_data:
+                return None
+            if loc_data.get("last_clicked"):
+                return loc_data["last_clicked"]
+            if loc_data.get("location") and isinstance(loc_data["location"], dict):
+                return loc_data["location"]
+            if loc_data.get("last_object_clicked"):
+                return loc_data["last_object_clicked"]
+            return None
+
+        user_location = get_new_user_location(loc_data)
+        prev_location = st.session_state.get("_user_location")
+
+        # Przeliczaj tylko jeśli lokalizacja się zmieniła
+        if user_location and "lat" in user_location and "lng" in user_location:
+            if (
+                not prev_location
+                or user_location["lat"] != prev_location.get("lat")
+                or user_location["lng"] != prev_location.get("lng")
+            ):
+                st.session_state["_user_location"] = user_location
+                lat = user_location["lat"]
+                lon = user_location["lng"]
+                nearest_df = geo.find_nearest_schools(
+                    (
+                        df_schools_to_display
+                        if not df_schools_to_display.empty
+                        else df_schools_raw
+                    ),
+                    lat,
+                    lon,
+                    top_n=5,
+                )
+                st.session_state["_nearest_schools"] = nearest_df
+
+        # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
+        nearest_df = st.session_state.get("_nearest_schools")
+        if nearest_df is not None:
             st.write("Najbliższe szkoły:")
             st.table(
                 nearest_df[

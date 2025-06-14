@@ -45,6 +45,6 @@ def find_nearest_schools(
     if df.empty:
         return df
     df["DistanceKm"] = haversine_distance(
-        df["SzkolaLat"].to_numpy(), df["SzkolaLon"].to_numpy(), lat, lon
+        lat, lon, df["SzkolaLat"].to_numpy(), df["SzkolaLon"].to_numpy()
     )
     return df.sort_values("DistanceKm").head(top_n)
