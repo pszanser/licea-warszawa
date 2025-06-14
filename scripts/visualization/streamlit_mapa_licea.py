@@ -554,8 +554,7 @@ def main():
                 st.session_state["_user_location"] = user_location
                 lat = user_location["lat"]
                 lon = user_location["lng"]
-                
-                # Przeliczy najbliższe szkoły
+                  # Przeliczy najbliższe szkoły
                 nearest_df = geo.find_nearest_schools(
                     (
                         df_schools_to_display
@@ -564,21 +563,24 @@ def main():
                     ),
                     lat,
                     lon,
-                    top_n=5,
+                    top_n=10,
                 )
                 st.session_state["_nearest_schools"] = nearest_df
-                
-                # Wymuś odświeżenie, żeby mapa się przerysowała z nową pinezką
-                st.rerun()
-
-        # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
+                  # Wymuś odświeżenie, żeby mapa się przerysowała z nową pinezką
+                st.rerun()        # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
         nearest_df = st.session_state.get("_nearest_schools")
         if nearest_df is not None:
+            # Dodaj kolumnę z numerem porządkowym i ukryj indeks
+            display_df = nearest_df.reset_index(drop=True)
+            display_df.index = range(1, len(display_df) + 1)
+            display_df.index.name = "Lp."
+            
             st.write("Najbliższe szkoły:")
-            st.table(
-                nearest_df[
-                    ["NazwaSzkoly", "AdresSzkoly", "Dzielnica", "DistanceKm"]
-                ].rename(columns={"DistanceKm": "Dystans [km]"})
+            st.caption("*Odległości podane w linii prostej (dystans rzeczywisty może być większy)")
+            st.dataframe(
+                display_df[["NazwaSzkoly", "AdresSzkoly", "Dzielnica", "DistanceKm"]]
+                .rename(columns={"DistanceKm": "Dystans [km]"}), 
+                use_container_width=True
             )
 
         if not df_filtered_classes.empty:
