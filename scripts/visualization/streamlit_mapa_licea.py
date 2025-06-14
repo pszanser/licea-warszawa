@@ -563,11 +563,13 @@ def main():
                     ),
                     lat,
                     lon,
-                    top_n=10,
-                )
+                    top_n=10,                )
                 st.session_state["_nearest_schools"] = nearest_df
-                  # Wymuś odświeżenie, żeby mapa się przerysowała z nową pinezką
-                st.rerun()        # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
+                
+                # Wymuś odświeżenie, żeby mapa się przerysowała z pinezką od razu
+                st.rerun()
+
+        # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
         nearest_df = st.session_state.get("_nearest_schools")
         if nearest_df is not None:
             # Dodaj kolumnę z numerem porządkowym i ukryj indeks
