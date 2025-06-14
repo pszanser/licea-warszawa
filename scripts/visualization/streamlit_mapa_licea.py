@@ -82,10 +82,6 @@ FILTER_DEFAULTS = {
     # aby widgety mogły użyć swoich parametrów 'index'/'value'.
 }
 
-# Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
-scripts_dir = Path(__file__).resolve().parent.parent
-if str(scripts_dir) not in sys.path:
-    sys.path.insert(0, str(scripts_dir))
 
 # Import funkcji z generate_map.py
 from visualization.generate_map import (
