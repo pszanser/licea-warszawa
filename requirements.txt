@@ -9,6 +9,7 @@ aiohttp
 matplotlib
 seaborn
 folium
+altair<5
 streamlit
 streamlit-folium
 numpy
