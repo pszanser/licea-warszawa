@@ -9,8 +9,8 @@ aiohttp
 matplotlib
 seaborn
 folium
-altair<5
-streamlit
+altair
+streamlit>1.27
 streamlit-folium
 numpy
 pytest
