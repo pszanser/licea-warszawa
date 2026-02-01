@@ -35,6 +35,7 @@ FILTER_LABELS = {
     "scatter_rank": "Ranking vs próg punktowy",
     "cooccurrence": "Współwystępowanie rozszerzeń",
     "bubble_commute": "Czas dojazdu vs próg (bąbelkowy)",
+    "districts": "Wybierz dzielnice:",
 }
 
 FILTER_HELPS = {
@@ -53,8 +54,8 @@ FILTER_HELPS = {
     "scatter_rank": "Zależność progu od rankingu",
     "cooccurrence": "Które rozszerzenia występują razem",
     "bubble_commute": "Próg szkoły a czas dojazdu",
+    "districts": "Ogranicz wyniki do wybranych dzielnic",
 }
-
 FILTER_DEFAULTS = {
     "school_type": [],
     "ranking_filter": False,
@@ -69,6 +70,7 @@ FILTER_DEFAULTS = {
     "scatter_rank": True,
     "cooccurrence": False,
     "bubble_commute": False,
+    "districts": [],
     # Uwaga: ranking_top i points_range nie są tutaj,
     # ponieważ ich istnienie w session_state jest warunkowe
     # i są obsługiwane przez 'del' podczas resetu,
@@ -135,6 +137,12 @@ def get_unique_school_names(df_schools):
     This function is cached by Streamlit to avoid recomputing on every rerun.
     """
     return sorted(df_schools["NazwaSzkoly"].unique())
+
+
+@st.cache_data
+def get_unique_districts(df_schools):
+    """Zwraca posortowaną listę dzielnic."""
+    return sorted(df_schools["Dzielnica"].dropna().unique())
 
 
 @st.cache_data
@@ -234,6 +242,29 @@ def main():
                 help=FILTER_HELPS["ranking_top"],
             )
 
+        st.subheader("Dzielnica")
+        if selected_school_types:
+            df_for_districts = df_schools_raw[
+                df_schools_raw["TypSzkoly"].isin(selected_school_types)
+            ]
+        else:
+            df_for_districts = df_schools_raw
+        if (
+            max_ranking_poz_filter is not None
+            and "RankingPoz" in df_for_districts.columns
+        ):
+            df_for_districts = df_for_districts[
+                df_for_districts["RankingPoz"] <= max_ranking_poz_filter
+            ]
+        district_options = get_unique_districts(df_for_districts)
+        selected_districts = st.multiselect(
+            FILTER_LABELS["districts"],
+            district_options,
+            placeholder="Wybierz...",
+            key="districts",
+            help=FILTER_HELPS["districts"],
+        )
+
         st.subheader("Nazwa szkoły")
         # Lista nazw szkół zależy od wybranych typów
         if selected_school_types:
@@ -242,6 +273,11 @@ def main():
             ]
         else:
             df_for_names = df_schools_raw
+
+        if selected_districts:
+            df_for_names = df_for_names[
+                df_for_names["Dzielnica"].isin(selected_districts)
+            ]
 
         # Dodatkowe ograniczenie listy nazw na podstawie rankingu (TOP)
         if max_ranking_poz_filter is not None and "RankingPoz" in df_for_names.columns:
@@ -377,6 +413,13 @@ def main():
             df_schools_by_type["NazwaSzkoly"].isin(selected_school_names)
         ]
 
+    if selected_districts:
+        # Filtrowanie klas i szkół według wybranych dzielnic
+        cls_mask = df_classes_by_type["Dzielnica"].isin(selected_districts)
+        df_classes_by_type = df_classes_by_type[cls_mask]
+        sch_mask = df_schools_by_type["Dzielnica"].isin(selected_districts)
+        df_schools_by_type = df_schools_by_type[sch_mask]
+
     df_filtered_classes = apply_filters_to_classes(
         df_classes_by_type,
         wanted_subjects=wanted_subjects_filter,
@@ -422,6 +465,8 @@ def main():
         filter_entries.append(("Typ oddziału", ", ".join(selected_class_types)))
     if selected_school_names:
         filter_entries.append(("Wybrane szkoły", ", ".join(selected_school_names)))
+    if selected_districts:
+        filter_entries.append(("Dzielnice", ", ".join(selected_districts)))
     if wanted_subjects_filter:
         filter_entries.append(
             ("Rozszerzenia - poszukiwane", ", ".join(wanted_subjects_filter))
