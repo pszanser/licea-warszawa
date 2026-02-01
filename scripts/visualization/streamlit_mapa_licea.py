@@ -14,6 +14,13 @@ from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
 import numbers
 import io
+# Zapewniamy, że katalog `scripts` (z plikiem geo.py) jest w sys.path
+_scripts_dir = Path(__file__).resolve().parent.parent
+if str(_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_scripts_dir))
+
+import importlib
+geo = importlib.import_module("geo")
 
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
@@ -75,10 +82,6 @@ FILTER_DEFAULTS = {
     # aby widgety mogły użyć swoich parametrów 'index'/'value'.
 }
 
-# Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
-scripts_dir = Path(__file__).resolve().parent.parent
-if str(scripts_dir) not in sys.path:
-    sys.path.insert(0, str(scripts_dir))
 
 # Import funkcji z generate_map.py
 from visualization.generate_map import (
@@ -102,6 +105,7 @@ def create_schools_map_streamlit(
     filtered_class_details_per_school: dict,
     school_summary_from_filtered: dict,
     show_heatmap: bool = False,
+    user_marker_location: tuple[float, float] | None = None,
 ):
     """
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
@@ -121,6 +125,14 @@ def create_schools_map_streamlit(
             filtered_class_details_per_school=filtered_class_details_per_school,
             school_summary_from_filtered=school_summary_from_filtered,
         )
+
+    # Dodaj pinezkę użytkownika, jeśli jest lokalizacja
+    if user_marker_location is not None:
+        folium.Marker(
+            location=user_marker_location,
+            icon=folium.Icon(color="red", icon="user", prefix="fa"),
+            popup="Twój punkt odniesienia"
+        ).add_to(m)
 
     if show_heatmap and not df_schools_to_display.empty:
         heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
@@ -455,7 +467,12 @@ def main():
             </div>
             """,
             unsafe_allow_html=True,
-        )
+        )    # Sprawdź, czy jest lokalizacja użytkownika do zaznaczenia pinezką
+    user_marker_location = None
+    if "_user_location" in st.session_state:
+        loc = st.session_state["_user_location"]
+        if loc and "lat" in loc and "lng" in loc:
+            user_marker_location = (loc["lat"], loc["lng"])
 
     map_object = create_schools_map_streamlit(
         df_schools_to_display=df_schools_to_display,
@@ -463,6 +480,7 @@ def main():
         filtered_class_details_per_school=detailed_filtered_classes_info,
         school_summary_from_filtered=school_summary_from_filtered,
         show_heatmap=show_heatmap,
+        user_marker_location=user_marker_location,
     )
 
     if not df_schools_to_display.empty:
@@ -500,12 +518,106 @@ def main():
 
     with tab_map:
         st.subheader("Mapa szkół")
-        st_folium(map_object, width=None, height=600, returned_objects=[])
+        
+        # Wyświetl mapę i pobierz dane o interakcji
+        loc_data = st_folium(
+            map_object, width=None, height=600, 
+            returned_objects=["last_clicked", "last_object_clicked", "location"]
+        )
+
+        # Przechowuj ostatnią znaną lokalizację użytkownika w session_state
+        def get_new_user_location(loc_data):
+            if not loc_data:
+                return None
+            if loc_data.get("last_clicked"):
+                return loc_data["last_clicked"]
+            if loc_data.get("location") and isinstance(loc_data["location"], dict):
+                return loc_data["location"]
+            if loc_data.get("last_object_clicked"):
+                return loc_data["last_object_clicked"]
+            return None
+
+        user_location = get_new_user_location(loc_data)
+        prev_location = st.session_state.get("_user_location")        # Przeliczaj tylko jeśli lokalizacja się zmieniła
+        if user_location and "lat" in user_location and "lng" in user_location:
+            if (
+                not prev_location
+                or user_location["lat"] != prev_location.get("lat")
+                or user_location["lng"] != prev_location.get("lng")
+            ):
+                st.session_state["_user_location"] = user_location
+                lat = user_location["lat"]
+                lon = user_location["lng"]
+                
+                # Przeliczy najbliższe szkoły (do wyświetlenia listy)
+                nearest_df = geo.find_nearest_schools(
+                    (
+                        df_schools_to_display
+                        if not df_schools_to_display.empty
+                        else df_schools_raw
+                    ),
+                    lat,
+                    lon,
+                    top_n=10,
+                )
+                st.session_state["_nearest_schools"] = nearest_df
+                
+                # Przeliczy odległości dla wszystkich szkół i zapisz w session_state
+                all_schools_with_distance = df_schools_raw.dropna(subset=["SzkolaLat", "SzkolaLon"]).copy()
+                if not all_schools_with_distance.empty:
+                    all_schools_with_distance["OdlegloscOdUzytkownika_km"] = geo.haversine_distance(
+                        lat, lon,
+                        all_schools_with_distance["SzkolaLat"].to_numpy(),
+                        all_schools_with_distance["SzkolaLon"].to_numpy()
+                    )
+                    st.session_state["_schools_with_distances"] = all_schools_with_distance
+                  # Wymuś odświeżenie, żeby mapa się przerysowała z pinezką od razu
+                st.rerun()
+
+        # Wyświetl listę najbliższych szkół jeśli jest zapamiętana
+        nearest_df = st.session_state.get("_nearest_schools")
+        if nearest_df is not None:
+            # Dodaj kolumnę z numerem porządkowym i ukryj indeks
+            display_df = nearest_df.reset_index(drop=True)
+            display_df.index = range(1, len(display_df) + 1)
+            display_df.index.name = "Lp."
+            
+            st.write("Najbliższe szkoły:")
+            st.caption("*Odległości podane w linii prostej (dystans rzeczywisty może być większy)")
+            st.dataframe(
+                display_df[["NazwaSzkoly", "AdresSzkoly", "Dzielnica", "DistanceKm"]]
+                .rename(columns={"DistanceKm": "Dystans [km]"}), 
+                use_container_width=True
+            )
 
         if not df_filtered_classes.empty:
             buf = io.BytesIO()
+            
+            # Przygotuj dane klas z odległością od użytkownika
+            df_classes_export = df_filtered_classes.copy()
+            schools_with_distances = st.session_state.get("_schools_with_distances")
+            if schools_with_distances is not None:
+                # Join z danymi o odległościach
+                distance_data = schools_with_distances[["SzkolaIdentyfikator", "OdlegloscOdUzytkownika_km"]].copy()
+                df_classes_export = df_classes_export.merge(
+                    distance_data, 
+                    on="SzkolaIdentyfikator", 
+                    how="left"
+                )
+            
+            # Przygotuj dane szkół z odległością od użytkownika
+            df_schools_export = df_schools_to_display.copy()
+            if schools_with_distances is not None:
+                distance_data = schools_with_distances[["SzkolaIdentyfikator", "OdlegloscOdUzytkownika_km"]].copy()
+                df_schools_export = df_schools_export.merge(
+                    distance_data, 
+                    on="SzkolaIdentyfikator", 
+                    how="left"
+                )
+            
             with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
+                df_classes_export.to_excel(writer, index=False, sheet_name="Klasy")
+                df_schools_export.to_excel(writer, index=False, sheet_name="Szkoły")
                 if filter_entries:
                     filters_df = pd.DataFrame(
                         filter_entries, columns=["Filtr", "Wartość"]
@@ -513,15 +625,15 @@ def main():
                     filters_df.to_excel(writer, index=False, sheet_name="Parametry")
             buf.seek(0)
             st.download_button(
-                label="📥Pobierz dane klas (Excel)",
+                label="📥Pobierz dane klas i szkół (Excel)",
                 data=buf,
-                file_name="moje_klasy.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                file_name="moje_szkoly_i_klasy.xlsx",                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
         if not df_schools_to_display.empty:
             with st.expander("Pokaż listę pasujących szkół", expanded=False):
                 schools_summary_list = []
+                schools_with_distances = st.session_state.get("_schools_with_distances")
                 for _, school_row in df_schools_to_display.iterrows():
                     szk_id = school_row["SzkolaIdentyfikator"]
                     class_count = count_filtered_classes.get(szk_id, 0)
@@ -546,26 +658,38 @@ def main():
                     display_ranking = school_row.get("RankingPoz")
                     if pd.notna(display_ranking):
                         display_ranking = (
-                            int(display_ranking)
-                            if display_ranking == display_ranking // 1
+                            int(display_ranking)                            if display_ranking == display_ranking // 1
                             else float(display_ranking)
                         )
                     else:
                         display_ranking = None
 
-                    schools_summary_list.append(
-                        {
-                            "Nazwa szkoły": school_row["NazwaSzkoly"],
-                            "Dzielnica": school_row["Dzielnica"],
-                            "Ranking": display_ranking,
-                            "Liczba pasujących klas": class_count,
-                            "Min. próg pkt. (z pasujących klas)": (
-                                min_threshold_from_filtered_classes
-                                if pd.notna(min_threshold_from_filtered_classes)
-                                else None
-                            ),
-                        }
-                    )
+                    # Pobierz odległość od użytkownika, jeśli dostępna
+                    distance_from_user = None
+                    if schools_with_distances is not None:
+                        distance_row = schools_with_distances[
+                            schools_with_distances["SzkolaIdentyfikator"] == szk_id
+                        ]
+                        if not distance_row.empty:
+                            distance_from_user = distance_row.iloc[0]["OdlegloscOdUzytkownika_km"]
+
+                    school_dict = {
+                        "Nazwa szkoły": school_row["NazwaSzkoly"],
+                        "Dzielnica": school_row["Dzielnica"],
+                        "Ranking": display_ranking,
+                        "Liczba pasujących klas": class_count,
+                        "Min. próg pkt. (z pasujących klas)": (
+                            min_threshold_from_filtered_classes
+                            if pd.notna(min_threshold_from_filtered_classes)
+                            else None
+                        ),
+                    }
+                    
+                    # Dodaj odległość tylko jeśli jest dostępna
+                    if distance_from_user is not None:
+                        school_dict["Odległość od użytkownika [km]"] = round(distance_from_user, 2)
+                    
+                    schools_summary_list.append(school_dict)
 
                 schools_summary_df = pd.DataFrame(schools_summary_list)
 
