@@ -6,18 +6,14 @@ import pandas as pd
 from typing import Callable, Any
 
 import sys
-from importlib.util import spec_from_file_location, module_from_spec
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-MAIN_PATH = ROOT / "scripts" / "main.py"
-spec = spec_from_file_location("main", MAIN_PATH)
-main = module_from_spec(spec)
-spec.loader.exec_module(main)
-extract_class_type = main.extract_class_type
+from scripts.pipeline import extract_class_type
 
 RESULTS_DIR = ROOT / "results"
+APP_DATA_FILE = RESULTS_DIR / "app" / "licea_warszawa.xlsx"
 DATA_PATTERN = "LO_Warszawa_2025_*.xlsx"
 MAP_OUTPUT_FILENAME = "mapa_licea_warszawa.html"
 WARSAW_CENTER_COORDS = [52.2297, 21.0122]  # Współrzędne centrum Warszawy
@@ -38,13 +34,91 @@ def get_latest_xls_file(directory: Path, pattern: str) -> Path | None:
     return latest_file
 
 
-def load_school_data(excel_path: Path) -> pd.DataFrame | None:
+def get_app_or_latest_xls_file(directory: Path = RESULTS_DIR) -> Path | None:
+    """Preferuje stabilny plik aplikacyjny, z fallbackiem na stary jednoroczny Excel."""
+    if APP_DATA_FILE.exists():
+        print(f"Używam pliku aplikacyjnego: {APP_DATA_FILE}")
+        return APP_DATA_FILE
+    return get_latest_xls_file(directory, DATA_PATTERN)
+
+
+def _sheet_name(excel_path: Path, new_name: str, legacy_name: str) -> str:
+    xls = pd.ExcelFile(excel_path)
+    return new_name if new_name in xls.sheet_names else legacy_name
+
+
+def get_available_years(excel_path: Path) -> list[int]:
+    """Zwraca lata dostępne w pliku aplikacji lub [2025] dla legacy Excela."""
+    try:
+        sheet = _sheet_name(excel_path, "metadata", "info")
+        if sheet == "metadata":
+            metadata = pd.read_excel(excel_path, sheet_name=sheet)
+            return sorted(
+                [int(year) for year in metadata["year"].dropna().unique()],
+                reverse=True,
+            )
+        schools_sheet = _sheet_name(excel_path, "schools", "szkoly")
+        schools = pd.read_excel(excel_path, sheet_name=schools_sheet, nrows=10)
+        if "year" in schools.columns:
+            return sorted(
+                [int(year) for year in schools["year"].dropna().unique()],
+                reverse=True,
+            )
+    except Exception:
+        pass
+    return [2025]
+
+
+def get_default_year(excel_path: Path, available_years: list[int] | None = None) -> int:
+    """Zwraca najnowszy kompletny rok danych, z fallbackiem na najnowszy dostępny."""
+    years = available_years or get_available_years(excel_path)
+    if not years:
+        return 2025
+
+    try:
+        metadata = pd.read_excel(excel_path, sheet_name="metadata")
+        if {"year", "data_status"}.issubset(metadata.columns):
+            full_years = metadata[metadata["data_status"].eq("full")]["year"].dropna()
+            full_years = [int(year) for year in full_years.unique()]
+            full_years = [year for year in full_years if year in years]
+            if full_years:
+                return max(full_years)
+    except Exception:
+        pass
+
+    return max(years)
+
+
+def load_metadata(excel_path: Path, year: int | None = None) -> pd.DataFrame:
+    try:
+        metadata = pd.read_excel(excel_path, sheet_name="metadata")
+    except Exception:
+        return pd.DataFrame()
+    if year is not None and "year" in metadata.columns:
+        metadata = metadata[metadata["year"] == year]
+    return metadata
+
+
+def load_quality(excel_path: Path, year: int | None = None) -> pd.DataFrame:
+    try:
+        quality = pd.read_excel(excel_path, sheet_name="quality")
+    except Exception:
+        return pd.DataFrame()
+    if year is not None and "year" in quality.columns:
+        quality = quality[quality["year"] == year]
+    return quality
+
+
+def load_school_data(excel_path: Path, year: int | None = None) -> pd.DataFrame | None:
     """
     Wczytuje dane szkół z arkusza 'szkoly' w podanym pliku Excel.
     Filtruje szkoły bez współrzędnych i sprawdza obecność wymaganych kolumn.
     """
     try:
-        df = pd.read_excel(excel_path, sheet_name="szkoly")
+        sheet = _sheet_name(excel_path, "schools", "szkoly")
+        df = pd.read_excel(excel_path, sheet_name=sheet)
+        if year is not None and "year" in df.columns:
+            df = df[df["year"] == year].copy()
 
         required_cols = [
             "SzkolaLat",
@@ -83,12 +157,15 @@ def load_school_data(excel_path: Path) -> pd.DataFrame | None:
         return None
 
 
-def load_classes_data(excel_path: Path) -> pd.DataFrame | None:
+def load_classes_data(excel_path: Path, year: int | None = None) -> pd.DataFrame | None:
     """
     Wczytuje dane klas z arkusza 'klasy' w podanym pliku Excel.
     """
     try:
-        df = pd.read_excel(excel_path, sheet_name="klasy")
+        sheet = _sheet_name(excel_path, "classes", "klasy")
+        df = pd.read_excel(excel_path, sheet_name=sheet)
+        if year is not None and "year" in df.columns:
+            df = df[df["year"] == year].copy()
         if "TypOddzialu" not in df.columns and "OddzialNazwa" in df.columns:
             df["TypOddzialu"] = df["OddzialNazwa"].apply(extract_class_type)
         return df
@@ -113,6 +190,23 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
             "Prog_max_szkola",
             "RankingPoz",
             "TypOddzialu",
+            "year",
+            "admission_year",
+            "school_year",
+            "data_status",
+            "status_label",
+            "threshold_mode",
+            "threshold_label",
+            "threshold_years",
+            "threshold_year",
+            "threshold_kind",
+            "Prog_szkola_threshold_year",
+            "Prog_szkola_threshold_kind",
+            "Prog_szkola_threshold_label",
+            "Progi_historyczne_szkola",
+            "Progi_historyczne_lata",
+            "LiczbaOddzialowPlan",
+            "LiczbaMiejscPlan",
         ]
     ]
     subject_cols = []
@@ -211,9 +305,9 @@ def aggregate_filtered_class_data(
     if df_filtered_classes.empty and any_filters_applied:
         # print("Żadne klasy nie spełniają podanych kryteriów filtrowania.")
         df_schools_to_display = pd.DataFrame(columns=df_schools_raw.columns)
-        count_filtered_classes = {}
-        detailed_filtered_classes_info = {}
-        school_summary_from_filtered = {}
+        count_filtered_classes: dict[str, int] = {}
+        detailed_filtered_classes_info: dict[str, list[dict[str, object]]] = {}
+        school_summary_from_filtered: dict[str, dict[str, object]] = {}
     elif df_filtered_classes.empty:  # No filters applied, but no classes data
         # print("Brak klas w danych wejściowych.")
         df_schools_to_display = pd.DataFrame(columns=df_schools_raw.columns)
@@ -320,32 +414,33 @@ def add_school_markers_to_map(
         summary = school_summary_from_filtered.get(szk_id, {})
 
         # Użyj rankingu z podsumowania przefiltrowanych klas, jeśli dostępne, inaczej z danych ogólnych szkoły
+        ranking_year = row.get("year")
         ranking_poz = summary.get("RankingPoz", row.get("RankingPoz"))
         if pd.notna(ranking_poz):
             display_ranking = (
                 int(ranking_poz) if ranking_poz == ranking_poz // 1 else ranking_poz
             )
-            popup_html += f"Ranking Perspektywy 2025: {display_ranking}<br>"
+            ranking_suffix = f" {int(ranking_year)}" if pd.notna(ranking_year) else ""
+            popup_html += f"Ranking Perspektywy{ranking_suffix}: {display_ranking}<br>"
 
-        # Progi punktowe z przefiltrowanych klas
-        min_prog_filtered = summary.get("Prog_min_szkola")
-        max_prog_filtered = summary.get("Prog_max_szkola")
-
-        if pd.notna(min_prog_filtered) and pd.notna(max_prog_filtered):
-            popup_html += f"Przedział pkt. szkoły (dla filtr. klas) 2024: {(min_prog_filtered)}–{(max_prog_filtered)}<br>"
+        historical_thresholds = row.get("Progi_historyczne_szkola")
+        if pd.notna(historical_thresholds) and str(historical_thresholds).strip():
+            history_html = "<br>".join(str(historical_thresholds).split("; "))
+            popup_html += f"Progi punktowe:<br>{history_html}<br>"
         else:
-            # Jeśli brak danych z przefiltrowanych, użyj ogólnych progów szkoły
-            min_prog_general = row.get("Prog_min_szkola")
-            max_prog_general = row.get("Prog_max_szkola")
-            if pd.notna(min_prog_general) and pd.notna(max_prog_general):
-                if (
-                    min_prog_general == max_prog_general
-                ):  # np. gdy tylko jedna klasa lub wszystkie mają ten sam próg
-                    popup_html += (
-                        f"Próg punktowy szkoły (ogólny) 2024: {(min_prog_general)}<br>"
-                    )
+            min_prog = summary.get("Prog_min_szkola", row.get("Prog_min_szkola"))
+            max_prog = summary.get("Prog_max_szkola", row.get("Prog_max_szkola"))
+            if pd.notna(min_prog) and pd.notna(max_prog):
+                threshold_year = row.get("Prog_szkola_threshold_year")
+                year_prefix = (
+                    f"{int(threshold_year)}: " if pd.notna(threshold_year) else ""
+                )
+                if min_prog == max_prog:
+                    popup_html += f"Progi punktowe:<br>{year_prefix}{min_prog}<br>"
                 else:
-                    popup_html += f"Przedział pkt. szkoły (ogólny) 2024: {(min_prog_general)}–{(max_prog_general)}<br>"
+                    popup_html += (
+                        f"Progi punktowe:<br>{year_prefix}{min_prog}-{max_prog}<br>"
+                    )
 
         num_matching_classes = class_count_per_school.get(szk_id, 0)
         if num_matching_classes > 0:
@@ -368,7 +463,14 @@ def add_school_markers_to_map(
                     line += class_name
 
                 if pd.notna(class_min_pkt):
-                    line += f" (próg: {int(class_min_pkt) if class_min_pkt == class_min_pkt // 1 else class_min_pkt} pkt)"
+                    assert class_min_pkt is not None
+                    class_min_pkt_float = float(class_min_pkt)
+                    formatted_min_pkt = (
+                        int(class_min_pkt_float)
+                        if class_min_pkt_float.is_integer()
+                        else class_min_pkt
+                    )
+                    line += f" (próg: {formatted_min_pkt} pkt)"
                 popup_html += line + "<br>"
 
         if "url" in row and pd.notna(row["url"]):
@@ -411,7 +513,7 @@ def _add_heatmap_toggle(map_obj: folium.Map, heat_layer: HeatMap) -> None:
     """
     from folium import Element
 
-    map_obj.get_root().html.add_child(Element(button_html))
+    map_obj.get_root().html.add_child(Element(button_html))  # type: ignore[attr-defined]
 
 
 def create_schools_map(
@@ -441,7 +543,7 @@ def create_schools_map(
         """
         from folium import Element
 
-        m.get_root().html.add_child(Element(legend_html))
+        m.get_root().html.add_child(Element(legend_html))  # type: ignore[attr-defined]
 
     if df_schools_to_display.empty:
         print("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.")
@@ -463,7 +565,7 @@ def create_schools_map(
         _add_heatmap_toggle(m, heat_layer)
     try:
         m.save(str(output_path))
-        print(f"✔ Mapa zapisana jako: {output_path}")
+        print(f"Mapa zapisana jako: {output_path}")
     except Exception as e:
         print(f"Błąd podczas zapisywania mapy: {e}")
 
@@ -480,7 +582,7 @@ def main():
     enable_heatmap = False
     # --- Koniec sekcji filtrów ---
 
-    latest_excel_file = get_latest_xls_file(RESULTS_DIR, DATA_PATTERN)
+    latest_excel_file = get_app_or_latest_xls_file(RESULTS_DIR)
     if not latest_excel_file:
         print("Nie można wygenerować mapy bez pliku danych.")
         return

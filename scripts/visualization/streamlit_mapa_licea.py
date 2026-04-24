@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="Mapa szkół średnich - Warszawa i okolice (2025)",
+    page_title="Mapa szkół średnich - Warszawa i okolice",
     page_icon="🏫",
     layout="wide",
 )
@@ -12,7 +12,6 @@ import pandas as pd
 import folium
 from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
-import numbers
 import io
 
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
@@ -83,9 +82,12 @@ if str(scripts_dir) not in sys.path:
 # Import funkcji z generate_map.py
 from visualization.generate_map import (
     RESULTS_DIR,
-    DATA_PATTERN,
     WARSAW_CENTER_COORDS,
-    get_latest_xls_file,
+    get_app_or_latest_xls_file,
+    get_available_years,
+    get_default_year,
+    load_metadata,
+    load_quality,
     load_school_data,
     load_classes_data,
     get_subjects_from_dataframe,
@@ -138,25 +140,26 @@ def get_unique_school_names(df_schools):
 
 
 @st.cache_data
-def load_all_data(excel_file: Path) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+def load_all_data(
+    excel_file: Path, selected_year: int | None, data_version: int
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     """Wczytuje dane szkół i klas z pliku Excel tylko raz.
 
     Użycie dekoratora ``st.cache_data`` sprawia, że podczas kolejnych
     uruchomień skryptu Streamlit ponowne wczytywanie pliku z dysku nie
-    będzie konieczne, dopóki ścieżka ``excel_file`` się nie zmieni.
+    będzie konieczne, dopóki ścieżka lub wersja pliku się nie zmieni.
     """
-    df_schools = load_school_data(excel_file)
-    df_classes = load_classes_data(excel_file)
+    _ = data_version
+    df_schools = load_school_data(excel_file, year=selected_year)
+    df_classes = load_classes_data(excel_file, year=selected_year)
     return df_schools, df_classes
 
 
 def main():
-    st.title("🏫 Mapa szkół średnich - Warszawa i okolice (2025)")
-    st.markdown(
-        """
+    st.title("🏫 Mapa szkół średnich - Warszawa i okolice")
+    st.markdown("""
     Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
-    """
-    )
+    """)
 
     # Initialize session state for filters if not already set
     # Używamy globalnego FILTER_DEFAULTS
@@ -164,13 +167,41 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    latest_excel_file = get_latest_xls_file(RESULTS_DIR, DATA_PATTERN)
+    latest_excel_file = get_app_or_latest_xls_file(RESULTS_DIR)
     if not latest_excel_file:
         st.error("Nie można wygenerować mapy bez pliku danych.")
         return
 
-    # Dane wczytujemy tylko raz dzięki cache'u Streamlit.
-    df_schools_raw, df_classes_raw = load_all_data(latest_excel_file)
+    available_years = get_available_years(latest_excel_file)
+    default_year = get_default_year(latest_excel_file, available_years)
+    if (
+        "selected_year" not in st.session_state
+        or st.session_state["selected_year"] not in available_years
+    ):
+        st.session_state["selected_year"] = default_year
+    default_index = available_years.index(st.session_state["selected_year"])
+    with st.sidebar:
+        st.header("Dane")
+        selected_year = st.selectbox(
+            "Rok danych:",
+            available_years,
+            index=default_index,
+            key="selected_year",
+            help="Domyślnie pokazywany jest najnowszy kompletny rok danych.",
+        )
+
+    metadata = load_metadata(latest_excel_file, selected_year)
+    quality = load_quality(latest_excel_file, selected_year)
+    meta_row = metadata.iloc[0].to_dict() if not metadata.empty else {}
+    status_label = meta_row.get("status_label") or "dane historyczne"
+    threshold_label = meta_row.get("threshold_label")
+    ranking_year = meta_row.get("year", selected_year)
+
+    # Dane wczytujemy z cache'em zależnym od czasu modyfikacji pliku.
+    data_version = latest_excel_file.stat().st_mtime_ns
+    df_schools_raw, df_classes_raw = load_all_data(
+        latest_excel_file, selected_year, data_version
+    )
 
     if df_schools_raw is None or df_classes_raw is None:
         st.error(
@@ -182,6 +213,16 @@ def main():
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
     if "_SL" not in latest_excel_file.name:
         st.write(f"Załadowano dane z pliku: **{latest_excel_file.name}**")
+    st.info(f"Rok danych: **{selected_year}** | status: **{status_label}**")
+    if not quality.empty:
+        q = quality.iloc[0]
+        st.caption(
+            "Kontrola danych: "
+            f"szkoły {int(q.get('schools_count', 0))}, "
+            f"klasy/wiersze {int(q.get('classes_count', 0))}, "
+            f"progi klasowe w {int(q.get('classes_with_threshold', 0))} wierszach, "
+            f"progi szkolne w {int(q.get('classes_with_school_threshold', 0))} wierszach."
+        )
 
     available_subjects = get_subjects_from_dataframe(df_classes_raw)
     available_class_types = (
@@ -217,7 +258,7 @@ def main():
             help=FILTER_HELPS["school_type"],
         )
 
-        st.subheader("Ranking Perspektyw 2025")
+        st.subheader(f"Ranking Perspektyw {int(ranking_year)}")
         use_ranking_filter = st.checkbox(
             FILTER_LABELS["ranking_filter"],
             key="ranking_filter",
@@ -286,7 +327,10 @@ def main():
             help=FILTER_HELPS["avoided_subjects"],
         )
 
-        st.subheader("Progi punktowe szkoły")
+        progi_label = "Progi punktowe szkoły"
+        if pd.notna(threshold_label):
+            progi_label = f"{progi_label} ({threshold_label})"
+        st.subheader(progi_label)
         # checkbox, domyślnie False – filtr wyłączony
         use_points_filter = st.checkbox(
             FILTER_LABELS["points_filter"],
@@ -440,6 +484,10 @@ def main():
         filter_entries.append(
             ("Maksymalny próg punktowy klasy", max_class_points_filter)
         )
+    export_filter_entries = [
+        ("Rok danych", selected_year),
+        ("Status danych", status_label),
+    ] + filter_entries
 
     filters_info_html = ""
     if filter_entries:
@@ -506,16 +554,16 @@ def main():
             buf = io.BytesIO()
             with pd.ExcelWriter(buf, engine="openpyxl") as writer:
                 df_filtered_classes.to_excel(writer, index=False, sheet_name="Klasy")
-                if filter_entries:
+                if export_filter_entries:
                     filters_df = pd.DataFrame(
-                        filter_entries, columns=["Filtr", "Wartość"]
+                        export_filter_entries, columns=["Filtr", "Wartość"]
                     )
                     filters_df.to_excel(writer, index=False, sheet_name="Parametry")
             buf.seek(0)
             st.download_button(
                 label="📥Pobierz dane klas (Excel)",
                 data=buf,
-                file_name="moje_klasy.xlsx",
+                file_name=f"moje_klasy_{selected_year}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
