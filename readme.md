@@ -99,6 +99,8 @@ Plik zawiera arkusze `metadata`, `quality`, `schools`, `classes`, `rankings`, `t
 *   `threshold_year` - rok źródłowy progu punktowego, np. `2025` albo `2024`.
 *   `threshold_mode` / `threshold_label` - informacja, czy progi są faktyczne dla danego roku, czy referencyjne.
 *   `Progi_historyczne_szkola` - lista znanych przedziałów progów szkoły według lat progów, pokazywana w szczegółach szkoły.
+*   `RankingPoz` / `RankingRok` - najnowszy znany ranking Perspektyw używany przez filtry i wykresy.
+*   `Ranking_historyczny_szkola` - lista znanych pozycji rankingowych szkoły według lat, pokazywana w szczegółach szkoły.
 
 Źródła dla kolejnych lat są opisane w `scripts/config/data_sources.yml`. Obecnie:
 

@@ -2,7 +2,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.visualization.generate_map import get_default_year
+from scripts.visualization.generate_map import (
+    format_ranking_history_for_display,
+    get_default_year,
+)
 
 
 def test_get_default_year_prefers_latest_full_year(monkeypatch):
@@ -27,3 +30,9 @@ def test_get_default_year_falls_back_to_latest_available_year(monkeypatch):
     monkeypatch.setattr(pd, "read_excel", lambda *args, **kwargs: metadata)
 
     assert get_default_year(Path("ignored.xlsx"), [2026, 2025]) == 2026
+
+
+def test_format_ranking_history_for_display():
+    assert (
+        format_ranking_history_for_display("2026: 4; 2025: 8") == "4 (2026), 8 (2025)"
+    )

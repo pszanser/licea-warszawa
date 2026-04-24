@@ -237,6 +237,18 @@ def format_threshold_range(min_value: Any, max_value: Any) -> str:
     return f"{min_text}-{max_text}"
 
 
+def format_ranking_value(value: Any, text_value: Any = None) -> str:
+    if text_value is not None and pd.notna(text_value):
+        text = str(text_value).strip()
+        if text and text.lower() != "nan":
+            text = text.rstrip("=")
+            return text[:-2] if text.endswith(".0") else text
+    if pd.isna(value):
+        return ""
+    number = float(value)
+    return str(int(number)) if number.is_integer() else f"{number:.2f}".rstrip("0")
+
+
 def historical_school_thresholds(df_thresholds: pd.DataFrame) -> pd.DataFrame:
     columns = [
         "SzkolaIdentyfikator",
@@ -273,6 +285,95 @@ def historical_school_thresholds(df_thresholds: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows, columns=columns)
+
+
+def school_ranking_summary(df_rankings: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "SzkolaIdentyfikator",
+        "RankingPozNajnowszy",
+        "RankingPozTekstNajnowszy",
+        "RankingRok",
+        "Ranking_historyczny_szkola",
+        "Ranking_lata",
+    ]
+    if df_rankings.empty or "SzkolaIdentyfikator" not in df_rankings.columns:
+        return pd.DataFrame(columns=columns)
+
+    rankings = df_rankings.copy()
+    if "RankingPozTekst" not in rankings.columns:
+        rankings["RankingPozTekst"] = rankings["RankingPoz"].astype(str)
+    rankings["RankingPoz"] = pd.to_numeric(rankings["RankingPoz"], errors="coerce")
+    rankings["year"] = pd.to_numeric(rankings["year"], errors="coerce")
+    rankings = rankings.dropna(subset=["SzkolaIdentyfikator", "year", "RankingPoz"])
+    if rankings.empty:
+        return pd.DataFrame(columns=columns)
+
+    rankings = (
+        rankings.sort_values(
+            ["SzkolaIdentyfikator", "year", "RankingPoz"],
+            ascending=[True, False, True],
+        )
+        .drop_duplicates(["SzkolaIdentyfikator", "year"], keep="first")
+        .sort_values(["SzkolaIdentyfikator", "year"], ascending=[True, False])
+    )
+
+    rows = []
+    for school_id, group in rankings.groupby("SzkolaIdentyfikator", sort=False):
+        latest = group.iloc[0]
+        parts = [
+            f"{int(row.year)}: "
+            f"{format_ranking_value(row.RankingPoz, row.RankingPozTekst)}"
+            for row in group.itertuples(index=False)
+        ]
+        rows.append(
+            {
+                "SzkolaIdentyfikator": school_id,
+                "RankingPozNajnowszy": latest["RankingPoz"],
+                "RankingPozTekstNajnowszy": format_ranking_value(
+                    latest["RankingPoz"], latest["RankingPozTekst"]
+                ),
+                "RankingRok": int(latest["year"]),
+                "Ranking_historyczny_szkola": "; ".join(parts),
+                "Ranking_lata": "/".join(
+                    str(int(year)) for year in group["year"].tolist()
+                ),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def apply_latest_rankings(sheets: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    ranking_summary = school_ranking_summary(sheets.get("rankings", pd.DataFrame()))
+    if ranking_summary.empty:
+        return sheets
+
+    updated = sheets.copy()
+    for sheet_name in ["schools", "classes"]:
+        df = updated.get(sheet_name, pd.DataFrame())
+        if df.empty or "SzkolaIdentyfikator" not in df.columns:
+            continue
+        df = df.copy()
+        rename_columns = {}
+        if "RankingPoz" in df.columns:
+            rename_columns["RankingPoz"] = "RankingPozRokuDanych"
+        if "RankingPozTekst" in df.columns:
+            rename_columns["RankingPozTekst"] = "RankingPozTekstRokuDanych"
+        df = df.rename(columns=rename_columns)
+        df = df.drop(
+            columns=[
+                "RankingPozNajnowszy",
+                "RankingPozTekstNajnowszy",
+                "RankingRok",
+                "Ranking_historyczny_szkola",
+                "Ranking_lata",
+            ],
+            errors="ignore",
+        )
+        df = df.merge(ranking_summary, how="left", on="SzkolaIdentyfikator")
+        df["RankingPoz"] = df["RankingPozNajnowszy"]
+        df["RankingPozTekst"] = df["RankingPozTekstNajnowszy"]
+        updated[sheet_name] = df
+    return updated
 
 
 def threshold_meta(year_cfg: dict[str, Any]) -> dict[str, Any]:
@@ -927,6 +1028,7 @@ def export_app_workbook(
         "thresholds": concat("thresholds"),
         "plan_naboru": concat("plan"),
     }
+    sheets = apply_latest_rankings(sheets)
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df in sheets.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)

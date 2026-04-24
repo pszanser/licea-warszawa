@@ -1,9 +1,11 @@
 import pandas as pd
 
 from scripts.pipeline import (
+    apply_latest_rankings,
     best_thresholds_for_keys,
     historical_school_thresholds,
     school_threshold_summary,
+    school_ranking_summary,
 )
 
 
@@ -68,3 +70,62 @@ def test_historical_school_thresholds_lists_all_known_years():
 
     assert result.iloc[0]["Progi_historyczne_szkola"] == "2025: 130-150; 2024: 120"
     assert result.iloc[0]["Progi_historyczne_lata"] == "2025/2024"
+
+
+def test_school_ranking_summary_lists_all_known_years_and_latest_rank():
+    rankings = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_1", "lo_2"],
+            "RankingPoz": [8, 4, 30],
+            "RankingPozTekst": ["8", "4=", "30"],
+            "year": [2025, 2026, 2025],
+        }
+    )
+
+    result = school_ranking_summary(rankings)
+    lo_1 = result[result["SzkolaIdentyfikator"].eq("lo_1")].iloc[0]
+
+    assert lo_1["RankingPozNajnowszy"] == 4
+    assert lo_1["RankingPozTekstNajnowszy"] == "4"
+    assert lo_1["RankingRok"] == 2026
+    assert lo_1["Ranking_historyczny_szkola"] == "2026: 4; 2025: 8"
+    assert lo_1["Ranking_lata"] == "2026/2025"
+
+
+def test_apply_latest_rankings_keeps_year_rank_and_sets_latest_rank():
+    sheets = {
+        "schools": pd.DataFrame(
+            {
+                "SzkolaIdentyfikator": ["lo_1"],
+                "RankingPoz": [8],
+                "RankingPozTekst": ["8"],
+            }
+        ),
+        "classes": pd.DataFrame(
+            {
+                "SzkolaIdentyfikator": ["lo_1"],
+                "OddzialNazwa": ["1A"],
+                "RankingPoz": [8],
+                "RankingPozTekst": ["8"],
+            }
+        ),
+        "rankings": pd.DataFrame(
+            {
+                "SzkolaIdentyfikator": ["lo_1", "lo_1"],
+                "RankingPoz": [8, 4],
+                "RankingPozTekst": ["8", "4="],
+                "year": [2025, 2026],
+            }
+        ),
+    }
+
+    result = apply_latest_rankings(sheets)
+    school = result["schools"].iloc[0]
+    class_row = result["classes"].iloc[0]
+
+    assert school["RankingPozRokuDanych"] == 8
+    assert school["RankingPoz"] == 4
+    assert school["RankingPozTekst"] == "4"
+    assert school["RankingRok"] == 2026
+    assert school["Ranking_historyczny_szkola"] == "2026: 4; 2025: 8"
+    assert class_row["RankingPoz"] == 4

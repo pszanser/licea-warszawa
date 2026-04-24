@@ -38,8 +38,8 @@ FILTER_LABELS = {
 
 FILTER_HELPS = {
     "school_type": "Ogranicz listę do wybranego typu, np. liceum",
-    "ranking_filter": "Włącz, jeśli liczy się miejsce w rankingu",
-    "ranking_top": "Tylko licea z pierwszych pozycji",
+    "ranking_filter": "Filtr używa najnowszego dostępnego rankingu",
+    "ranking_top": "Tylko licea z pierwszych pozycji najnowszego rankingu",
     "school_names": "Filtrowanie konkretnych szkół wg ich nazw",
     "class_types": "np. ogólny [O] lub dwujęzyczny [D]/[DW]",
     "wanted_subjects": "Klasa musi je oferować",
@@ -139,6 +139,13 @@ def get_unique_school_names(df_schools):
     return sorted(df_schools["NazwaSzkoly"].unique())
 
 
+def get_filter_ranking_year(df_schools: pd.DataFrame, fallback_year: int) -> int:
+    if "RankingRok" not in df_schools.columns:
+        return int(fallback_year)
+    years = pd.to_numeric(df_schools["RankingRok"], errors="coerce").dropna()
+    return int(years.max()) if not years.empty else int(fallback_year)
+
+
 @st.cache_data
 def load_all_data(
     excel_file: Path, selected_year: int | None, data_version: int
@@ -195,7 +202,6 @@ def main():
     meta_row = metadata.iloc[0].to_dict() if not metadata.empty else {}
     status_label = meta_row.get("status_label") or "dane historyczne"
     threshold_label = meta_row.get("threshold_label")
-    ranking_year = meta_row.get("year", selected_year)
 
     # Dane wczytujemy z cache'em zależnym od czasu modyfikacji pliku.
     data_version = latest_excel_file.stat().st_mtime_ns
@@ -208,6 +214,7 @@ def main():
             "Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana."
         )
         return
+    ranking_year = get_filter_ranking_year(df_schools_raw, selected_year)
 
     # prezentujemy nazwę tylko przy lokalnym uruchomieniu
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
@@ -475,7 +482,9 @@ def main():
             ("Rozszerzenia - unikane", ", ".join(avoided_subjects_filter))
         )
     if max_ranking_poz_filter is not None:
-        filter_entries.append(("Ranking TOP", max_ranking_poz_filter))
+        filter_entries.append(
+            (f"Ranking Perspektyw {int(ranking_year)} TOP", max_ranking_poz_filter)
+        )
     if min_class_points_filter is not None:
         filter_entries.append(
             ("Minimalny próg punktowy klasy", min_class_points_filter)

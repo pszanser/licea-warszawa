@@ -174,6 +174,21 @@ def load_classes_data(excel_path: Path, year: int | None = None) -> pd.DataFrame
         return None
 
 
+def format_ranking_history_for_display(history_value: Any) -> str:
+    if pd.isna(history_value) or not str(history_value).strip():
+        return ""
+    parts = []
+    for item in str(history_value).split("; "):
+        if ": " not in item:
+            continue
+        year, ranking = item.split(": ", 1)
+        ranking = ranking.strip()
+        year = year.strip()
+        if ranking and year:
+            parts.append(f"{ranking} ({year})")
+    return ", ".join(parts)
+
+
 def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
     """Wyciąga listę przedmiotów rozszerzonych z kolumn DataFrame"""
     potential_subjects = [
@@ -189,6 +204,14 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
             "Prog_min_szkola",
             "Prog_max_szkola",
             "RankingPoz",
+            "RankingPozTekst",
+            "RankingPozRokuDanych",
+            "RankingPozTekstRokuDanych",
+            "RankingPozNajnowszy",
+            "RankingPozTekstNajnowszy",
+            "RankingRok",
+            "Ranking_historyczny_szkola",
+            "Ranking_lata",
             "TypOddzialu",
             "year",
             "admission_year",
@@ -413,15 +436,25 @@ def add_school_markers_to_map(
 
         summary = school_summary_from_filtered.get(szk_id, {})
 
-        # Użyj rankingu z podsumowania przefiltrowanych klas, jeśli dostępne, inaczej z danych ogólnych szkoły
-        ranking_year = row.get("year")
-        ranking_poz = summary.get("RankingPoz", row.get("RankingPoz"))
-        if pd.notna(ranking_poz):
-            display_ranking = (
-                int(ranking_poz) if ranking_poz == ranking_poz // 1 else ranking_poz
-            )
-            ranking_suffix = f" {int(ranking_year)}" if pd.notna(ranking_year) else ""
-            popup_html += f"Ranking Perspektywy{ranking_suffix}: {display_ranking}<br>"
+        ranking_history = format_ranking_history_for_display(
+            row.get("Ranking_historyczny_szkola")
+        )
+        if ranking_history:
+            popup_html += f"Ranking Perspektywy: {ranking_history}<br>"
+        else:
+            # Użyj rankingu z podsumowania przefiltrowanych klas, jeśli dostępne, inaczej z danych ogólnych szkoły.
+            ranking_year = row.get("RankingRok", row.get("year"))
+            ranking_poz = summary.get("RankingPoz", row.get("RankingPoz"))
+            if pd.notna(ranking_poz):
+                display_ranking = (
+                    int(ranking_poz) if float(ranking_poz).is_integer() else ranking_poz
+                )
+                ranking_suffix = (
+                    f" {int(ranking_year)}" if pd.notna(ranking_year) else ""
+                )
+                popup_html += (
+                    f"Ranking Perspektywy{ranking_suffix}: {display_ranking}<br>"
+                )
 
         historical_thresholds = row.get("Progi_historyczne_szkola")
         if pd.notna(historical_thresholds) and str(historical_thresholds).strip():
