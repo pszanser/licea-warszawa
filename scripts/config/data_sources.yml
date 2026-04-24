@@ -1,0 +1,69 @@
+default_year: 2025
+app_data_file: results/app/licea_warszawa.xlsx
+
+years:
+  2025:
+    year: 2025
+    admission_year: 2025
+    school_year: "2025/2026"
+    data_status: full
+    status_label: "pełne dane"
+    threshold_mode: actual
+    threshold_label: "faktyczne progi 2025"
+    offer:
+      type: vulcan_legacy
+      path: results/szkoly_vulcan.xlsx
+      source_url: "https://warszawa.edu.com.pl/kandydat/app/offer_school_details.xhtml"
+      start_id: 1
+      end_id: 400
+    thresholds:
+      sources:
+        - type: minimum_points
+          path: data/raw/2025/minimalna_liczba_punktow_zakwalifikowani_2025.xlsx
+          source_url: "https://edukacja.um.warszawa.pl/documents/66399/127344221/Minimalna%2Bliczba%2Bpunkt%C3%B3w_zakwalifikowani_2025.xlsx/daf3266f-8acf-5bd4-0c4b-6be485c32e26?t=1753170279726"
+          threshold_year: 2025
+          threshold_kind: actual
+          threshold_label: "faktyczne progi 2025"
+          priority: 1
+        - type: minimum_points
+          path: data/raw/2024/minimalna_liczba_punktow_2024.xlsx
+          threshold_year: 2024
+          threshold_kind: historical
+          threshold_label: "historyczne progi 2024"
+          priority: 2
+    ranking:
+      type: perspektywy_pdf
+      path: data/raw/2025/ranking_liceow_warszawskich_2025.pdf
+      cache_path: results/processed/ranking_perspektywy_2025.xlsx
+
+  2026:
+    year: 2026
+    admission_year: 2026
+    school_year: "2026/2027"
+    data_status: planned_offer
+    status_label: "plan naboru bez szczegółowej oferty"
+    threshold_mode: reference
+    threshold_label: "progi referencyjne 2025/2024"
+    offer:
+      type: plan_naboru
+      path: data/raw/2026/plan_naboru_2026_2027.xlsx
+      source_url: "https://edukacja.um.warszawa.pl/documents/66399/153518577/Plan+naboru+16.04.26.xlsx/f1ff71bd-0096-9b96-995b-364a60347222?t=1776666824947"
+    thresholds:
+      sources:
+        - type: minimum_points
+          path: data/raw/2025/minimalna_liczba_punktow_zakwalifikowani_2025.xlsx
+          source_url: "https://edukacja.um.warszawa.pl/documents/66399/127344221/Minimalna%2Bliczba%2Bpunkt%C3%B3w_zakwalifikowani_2025.xlsx/daf3266f-8acf-5bd4-0c4b-6be485c32e26?t=1753170279726"
+          threshold_year: 2025
+          threshold_kind: reference
+          threshold_label: "progi referencyjne 2025"
+          priority: 1
+        - type: minimum_points
+          path: data/raw/2024/minimalna_liczba_punktow_2024.xlsx
+          threshold_year: 2024
+          threshold_kind: reference_fallback
+          threshold_label: "fallback: progi 2024"
+          priority: 2
+    ranking:
+      type: perspektywy_html
+      path: data/raw/2026/ranking_liceow_warszawskich_2026.html
+      source_url: "https://licea.perspektywy.pl/rankingi/ranking-liceow-warszawskich/"
