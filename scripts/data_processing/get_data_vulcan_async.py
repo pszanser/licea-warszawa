@@ -1,5 +1,4 @@
 import asyncio
-import aiohttp
 import pandas as pd
 from bs4 import BeautifulSoup
 
@@ -87,6 +86,8 @@ async def fetch_school(session, school_id):
 
 
 async def download_all_async(start_id=1, end_id=400, verbose=True):
+    import aiohttp
+
     async with aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=60)
     ) as session:

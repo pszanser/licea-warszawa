@@ -20,6 +20,7 @@ Zapytaj Devina o to repozytorium:
 - [Projekt: Wybór szkoły średniej w Warszawie i okolicach](#projekt-wybór-szkoły-średniej-w-warszawie-i-okolicach)
   - [Spis treści](#spis-treści)
   - [Struktura katalogów](#struktura-katalogów)
+  - [Model danych wieloletnich](#model-danych-wieloletnich)
   - [Jak zacząć](#jak-zacząć)
   - [Główne funkcjonalności](#główne-funkcjonalności)
     - [Przetwarzanie danych](#przetwarzanie-danych)
@@ -39,12 +40,17 @@ Zapytaj Devina o to repozytorium:
 ```
 .
 ├── data/                 # Katalog na pliki wejściowe
-│   ├── Minimalna liczba punktów 2024.xlsx
-│   ├── ranking-licea-warszawskie-2025.pdf
-│   └── waw_kod_dzielnica.csv
+│   ├── raw/              # Surowe źródła według roku danych
+│   │   ├── 2024/         # Historyczne progi punktowe
+│   │   ├── 2025/         # Ranking i progi dla danych 2025
+│   │   └── 2026/         # Ranking i plan naboru dla danych 2026
+│   └── reference/        # Słowniki pomocnicze niezależne od roku danych
+│       └── waw_kod_dzielnica.csv
 ├── gpts/                 # Pliki związane z GPTs 
 │   └── `dane_kolumny_opis.md`  # Opis arkuszy i kolumn w pliku wynikowych Excel 
-├── results/              # Katalog na pliki wynikowe 
+├── results/              # Katalog na pliki wynikowe
+│   ├── app/              # Stabilny plik danych aplikacji
+│   └── processed/        # Dane pośrednie używane przez pipeline
 ├── scripts/              # Katalog ze skryptami Python
 │   ├── __init__.py
 │   ├── main.py               # Główny skrypt uruchamiający przetwarzanie danych
@@ -64,15 +70,49 @@ Zapytaj Devina o to repozytorium:
 │   │   ├── get_data_vulcan_async.py
 │   │   ├── load_minimum_points.py
 │   │   └── parser_perspektywy.py
-│   ├── tests/                # Testy
+│   ├── tests/                # Starsze testy przy skryptach
 │   └── visualization/        # Skrypty do generowania wizualizacji i map
 │       ├── __init__.py
 │       ├── generate_map.py
 │       ├── generate_visuals.py
 │       ├── plots.py
 │       └── streamlit_mapa_licea.py
+├── tests/                # Główna suita testów pytest
 ├── requirements.txt      # Lista zależności Python
 └── README.md             # Ten plik
+```
+
+## Model danych wieloletnich
+
+Projekt buduje teraz jeden stabilny plik aplikacyjny:
+
+```powershell
+results/app/licea_warszawa.xlsx
+```
+
+Plik zawiera arkusze `metadata`, `quality`, `schools`, `classes`, `rankings`, `thresholds` i `plan_naboru`. Kluczowe kolumny roczne to:
+
+*   `year` - rok danych prezentowanych w aplikacji, np. `2026`.
+*   `admission_year` - rok rekrutacji/oferty, np. `2026`.
+*   `school_year` - rok szkolny, np. `2026/2027`.
+*   `source_school_id` - trwały identyfikator szkoły z konkretnego źródła danych.
+*   `data_status` / `status_label` - informacja, czy dane są pełne, czy planistyczne.
+*   `threshold_year` - rok źródłowy progu punktowego, np. `2025` albo `2024`.
+*   `threshold_mode` / `threshold_label` - informacja, czy progi są faktyczne dla danego roku, czy referencyjne.
+*   `Progi_historyczne_szkola` - lista znanych przedziałów progów szkoły według lat progów, pokazywana w szczegółach szkoły.
+*   `RankingPoz` / `RankingRok` - najnowszy znany ranking Perspektyw używany przez filtry i wykresy.
+*   `Ranking_historyczny_szkola` - lista znanych pozycji rankingowych szkoły według lat, pokazywana w szczegółach szkoły.
+
+Źródła dla kolejnych lat są opisane w `scripts/config/data_sources.yml`. Obecnie:
+
+*   `2025` używa pełnej oferty Vulcan, rankingu Perspektyw 2025 i faktycznych progów 2025 jako aktywnego źródła. Progi 2024 są zachowane jako historia/fallback.
+*   `2026` używa rankingu Perspektyw 2026, planu naboru 2026/2027 oraz progów referencyjnych 2025/2024. To są dane planistyczne do czasu publikacji szczegółowej oferty klas i progów 2026.
+
+Pipeline można uruchomić dla wszystkich lat albo dla jednego roku:
+
+```powershell
+python scripts/main.py
+python scripts/main.py --year 2026
 ```
 
 ## Jak zacząć
@@ -92,6 +132,10 @@ Zapytaj Devina o to repozytorium:
     ```powershell
     pip install -r requirements.txt
     ```
+    Zależności deweloperskie do walidacji lokalnej:
+    ```powershell
+    pip install -r requirements-dev.txt
+    ```
     *W razie potrzeby zaktualizuj pakiety:*
     ```powershell
     pip install --upgrade -r requirements.txt
@@ -108,7 +152,7 @@ Zapytaj Devina o to repozytorium:
     ```powershell
     python scripts/main.py
     ```
-    Główny plik wynikowy `LO_Warszawa_2025_{adres_bez_znakow_z_config}.xlsx` oraz pliki pośrednie pojawią się w folderze `results/`.
+    Główny plik aplikacyjny `results/app/licea_warszawa.xlsx` oraz pliki pośrednie pojawią się w folderze `results/`.
 7.  Aby wygenerować wizualizacje:
     ```powershell
     python scripts/visualization/generate_visuals.py
@@ -128,8 +172,9 @@ Zapytaj Devina o to repozytorium:
 
 ### Przetwarzanie danych
 *   **Pobieranie danych:** Automatyczne pobieranie danych o szkołach z systemu Vulcan
-*   **Parsowanie rankingu Perspektyw:** Ekstrakcja danych z PDF rankingu
-*   **Wczytywanie progów punktowych:** Integracja z historycznymi danymi o progach
+*   **Parsowanie rankingu Perspektyw:** Ekstrakcja danych z HTML/JS rankingu, z fallbackiem do PDF
+*   **Wczytywanie progów punktowych:** Integracja z historycznymi danymi o progach w różnych formatach Excela
+*   **Plan naboru:** Wczytywanie planu naboru 2026/2027 jako danych planistycznych
 *   **Obliczanie czasów dojazdu:** Precyzyjne geokodowanie i kalkulacja czasu podróży przez Google Maps API
 *   **Scoring:** Opcjonalny złożony wskaźnik oceny szkół
 

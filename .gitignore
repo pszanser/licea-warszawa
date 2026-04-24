@@ -35,6 +35,9 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+.pip-tmp/
+.streamlit*.log
+.tmp_*
 
 # Unit test / coverage reports
 htmlcov/
@@ -49,6 +52,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+.pytest_tmp*/
 cover/
 
 # Translations
@@ -178,8 +182,12 @@ cython_debug/
 .idea/
 
 # Data directories
-results/
+results/*
 !results/LO_Warszawa_2025_Warszawa_SL.xlsx
+!results/app/
+!results/app/**
+!results/processed/
+!results/processed/**
 
 # repomix
 repomix-output*

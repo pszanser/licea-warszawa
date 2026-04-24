@@ -1,5 +1,4 @@
 import pytest
-import googlemaps
 from unittest.mock import Mock
 import datetime
 

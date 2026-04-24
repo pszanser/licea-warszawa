@@ -1,3 +1,5 @@
+from io import StringIO
+
 import pytest
 import pandas as pd
 from unittest.mock import patch, MagicMock
@@ -67,7 +69,7 @@ def test_rows_from_page(mock_html_response):
         assert result == expected
 
 
-def test_build_csv(tmp_path, monkeypatch):
+def test_build_csv(monkeypatch):
     """
     Testuje funkcję build_csv pod kątem agregacji danych z wielu stron, usuwania duplikatów,
     sortowania oraz poprawnego zapisu do pliku CSV.
@@ -106,17 +108,27 @@ def test_build_csv(tmp_path, monkeypatch):
     # Mockowanie stałej LAST_PAGE
     monkeypatch.setattr("scripts.data_processing.get_data_kod_dzielnica.LAST_PAGE", 3)
 
-    # Ścieżka do tymczasowego pliku CSV
-    csv_path = str(tmp_path / "test_output.csv")
+    zapisany_csv = {}
+    original_to_csv = pd.DataFrame.to_csv
+
+    def fake_to_csv(self, path, *args, **kwargs):
+        buffer = StringIO()
+        original_to_csv(self, buffer, *args, **kwargs)
+        zapisany_csv["path"] = path
+        zapisany_csv["content"] = buffer.getvalue()
+
+    monkeypatch.setattr(pd.DataFrame, "to_csv", fake_to_csv)
+
+    csv_path = "test_output.csv"
 
     # Wywołanie funkcji
     df = build_csv(out_path=csv_path)
 
-    # Sprawdzenie czy plik został utworzony
-    assert (tmp_path / "test_output.csv").exists()
+    # Sprawdzenie czy CSV został zapisany pod oczekiwaną ścieżką
+    assert zapisany_csv["path"] == csv_path
 
     # Sprawdzenie zawartości pliku
-    output_df = pd.read_csv(csv_path)
+    output_df = pd.read_csv(StringIO(zapisany_csv["content"]))
 
     # Sprawdzenie kształtu DataFrame (4 wiersze, 2 kolumny)
     assert df.shape == (4, 2)

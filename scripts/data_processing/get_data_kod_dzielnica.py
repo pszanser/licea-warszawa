@@ -1,4 +1,5 @@
-import requests, pandas as pd
+import pandas as pd
+import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://www.kodypocztowe.info/warszawa"  # strona 1
@@ -12,13 +13,19 @@ def _rows_from_page(page: int) -> list[tuple[str, str]]:
     soup = BeautifulSoup(html, "html.parser")
     rows = []
     for tr in soup.select("tr._data"):  # wiersze z danymi
-        kod = tr.select_one("td.code-row").text.strip()
-        dziel = tr.select("td")[2].text.strip()  # 3-cia kolumna
+        code_cell = tr.select_one("td.code-row")
+        if code_cell is None:
+            continue
+        cells = tr.select("td")
+        if len(cells) < 3:
+            continue
+        kod = code_cell.text.strip()
+        dziel = cells[2].text.strip()  # 3-cia kolumna
         rows.append((kod, dziel))
     return rows
 
 
-def build_csv(out_path: str = "data/waw_kod_dzielnica.csv") -> pd.DataFrame:
+def build_csv(out_path: str = "data/reference/waw_kod_dzielnica.csv") -> pd.DataFrame:
     all_rows = []
     for p in range(1, LAST_PAGE + 1):
         all_rows.extend(_rows_from_page(p))

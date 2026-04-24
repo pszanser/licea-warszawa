@@ -7,8 +7,12 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import sys
+
+try:
+    import seaborn as sns
+except ImportError:  # pragma: no cover - fallback dla okrojonych srodowisk testowych
+    sns = None
 
 # Pozostałe moduły z projektu
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -271,8 +275,13 @@ def bubble_prog_vs_dojazd(df_szkoly_param: pd.DataFrame):
         print("Bubble-chart: brak pełnych danych (próg + dojazd).")
         return None
     size = 1200 / (df["RankingPoz"].fillna(100) + 4)
-    dz_color = {d: c for d, c in zip(df["Dzielnica"].unique(), plt.cm.tab20.colors)}
-    c = df["Dzielnica"].map(dz_color)
+    districts = df["Dzielnica"].dropna().unique()
+    palette = [
+        tuple(color)
+        for color in plt.get_cmap("tab20")(np.linspace(0, 1, max(len(districts), 1)))
+    ]
+    dz_color = {d: c for d, c in zip(districts, palette)}
+    c = [dz_color.get(district, (0.5, 0.5, 0.5, 1.0)) for district in df["Dzielnica"]]
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.scatter(
         df["CzasDojazdu"],
@@ -284,7 +293,7 @@ def bubble_prog_vs_dojazd(df_szkoly_param: pd.DataFrame):
         linewidth=0.5,
     )
     ax.set_xlabel("Czas dojazdu [min]")
-    ax.set_ylabel("Próg punktowy 2024")
+    ax.set_ylabel("Próg punktowy")
     ax.set_title("Próg punktowy vs czas dojazdu (rozmiar = ranking)")
     ax.grid(True, alpha=0.2)
     plt.tight_layout()
@@ -340,6 +349,9 @@ def stripplot_commute_district(df_szkoly_param: pd.DataFrame):
     if df_szkoly_param is None or df_szkoly_param["CzasDojazdu"].isna().all():
         print("Brak CzasDojazdu – pomijam strip-plot.")
         return None
+    if sns is None:
+        print("Brak seaborn – pomijam strip-plot.")
+        return None
     df = df_szkoly_param.copy()
     fig, ax = plt.subplots(figsize=(9, 6))
     sns.stripplot(
@@ -369,7 +381,10 @@ def histogram_threshold_distribution(df_klasy_param: pd.DataFrame):
         print("Histogram progów: brak danych do wyświetlenia.")
         return None
     fig, ax = plt.subplots(figsize=(8, 6))
-    sns.histplot(data, bins=20, kde=True, color="skyblue", ax=ax)
+    if sns is not None:
+        sns.histplot(data, bins=20, kde=True, color="skyblue", ax=ax)
+    else:
+        ax.hist(data, bins=20, color="skyblue", edgecolor="black")
     ax.axvline(
         data.mean(), color="red", linestyle="--", label=f"Średnia: {data.mean():.1f}"
     )
@@ -396,7 +411,11 @@ def bar_classes_per_district(
         print("Brak danych do wykresu klas na dzielnice.")
         return None
     fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(y=counts.index, x=counts.values, ax=ax, color="steelblue")
+    if sns is not None:
+        sns.barplot(y=counts.index, x=counts.values, ax=ax, color="steelblue")
+    else:
+        ax.barh(counts.index, counts.values, color="steelblue")
+        ax.invert_yaxis()
     ax.set_xlabel("Liczba klas")
     ax.set_ylabel("Dzielnica")
     ax.set_title("Liczba klas licealnych w dzielnicach")
@@ -445,7 +464,7 @@ def scatter_rank_vs_threshold(df_szkoly_param: pd.DataFrame):
     xp = np.linspace(df["RankingPoz"].min(), df["RankingPoz"].max(), 100)
     ax.plot(xp, np.polyval(z, xp), linestyle="--")
     ax.set_xlabel("Pozycja w rankingu (↓ = lepiej)")
-    ax.set_ylabel("Minimalny próg punktowy 2024")
+    ax.set_ylabel("Minimalny próg punktowy")
     ax.set_title("Ranking szkoły a minimalny próg punktowy")
     plt.tight_layout()
     return fig

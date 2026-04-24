@@ -1,9 +1,13 @@
 """Skrypt zapisujący wykresy do plików w katalogu `results`."""
 
+import argparse
 from pathlib import Path
 import os
 import pandas as pd
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import sys
 
@@ -30,7 +34,8 @@ from config.constants import ALL_SUBJECTS as SUBJECTS
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 RESULTS = ROOT / "results"
-PATTERN = "LO_Warszawa_2025_*.xlsx"
+APP_DATA_FILE = RESULTS / "app" / "licea_warszawa.xlsx"
+LEGACY_PATTERN = "LO_Warszawa_2025_*.xlsx"
 OUT_DIR = RESULTS
 
 
@@ -40,7 +45,7 @@ def save_fig(fig, filename, dpi: int = 150):
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=dpi)
     plt.close(fig)
-    print(f"✔ zapisano {out.name}")
+    print(f"Zapisano {out.name}")
 
 
 def get_latest_xls(results_dir: Path, pattern: str) -> Path:
@@ -52,28 +57,56 @@ def get_latest_xls(results_dir: Path, pattern: str) -> Path:
     return max(files, key=os.path.getmtime)
 
 
-def load_excel_data(xls_path: Path):
+def get_input_xls() -> Path:
+    if APP_DATA_FILE.exists():
+        return APP_DATA_FILE
+    return get_latest_xls(RESULTS, LEGACY_PATTERN)
+
+
+def select_default_year(excel_file_handle: pd.ExcelFile) -> int | None:
+    if "metadata" not in excel_file_handle.sheet_names:
+        return None
+    metadata = pd.read_excel(excel_file_handle, "metadata")
+    if "year" not in metadata.columns:
+        return None
+    if "data_status" in metadata.columns:
+        full_years = metadata[metadata["data_status"].eq("full")]["year"].dropna()
+        if not full_years.empty:
+            return int(full_years.max())
+    years = metadata["year"].dropna()
+    return int(years.max()) if not years.empty else None
+
+
+def load_excel_data(xls_path: Path, year: int | None = None):
     excel_file_handle = pd.ExcelFile(xls_path)
-    df_klasy = pd.read_excel(excel_file_handle, "klasy")
+    selected_year = year if year is not None else select_default_year(excel_file_handle)
+    classes_sheet = "classes" if "classes" in excel_file_handle.sheet_names else "klasy"
+    schools_sheet = (
+        "schools" if "schools" in excel_file_handle.sheet_names else "szkoly"
+    )
+
+    df_klasy = pd.read_excel(excel_file_handle, classes_sheet)
+    if selected_year is not None and "year" in df_klasy.columns:
+        df_klasy = df_klasy[df_klasy["year"].eq(selected_year)].copy()
     df_klasy["RankingPoz"] = pd.to_numeric(df_klasy["RankingPoz"], errors="coerce")
     try:
-        df_szkoly = pd.read_excel(excel_file_handle, "szkoly")
+        df_szkoly = pd.read_excel(excel_file_handle, schools_sheet)
+        if selected_year is not None and "year" in df_szkoly.columns:
+            df_szkoly = df_szkoly[df_szkoly["year"].eq(selected_year)].copy()
     except Exception as e:
         print(
-            f"Ostrzeżenie: Nie udało się wczytać arkusza 'szkoly' z pliku {xls_path}. {e}"
+            f"Ostrzeżenie: Nie udało się wczytać arkusza szkół z pliku {xls_path}. {e}"
         )
-        print(
-            "Heatmapy zależne od danych z arkusza 'szkoly' mogą nie zostać wygenerowane."
-        )
+        print("Heatmapy zależne od danych szkół mogą nie zostać wygenerowane.")
         df_szkoly = None
-    return df_klasy, df_szkoly
+    return df_klasy, df_szkoly, selected_year
 
 
 def ensure_subject_columns(df: pd.DataFrame):
     for subj_col in SUBJECTS:
         if subj_col not in df.columns:
             print(
-                f"Ostrzeżenie: Brak kolumny '{subj_col}' w danych 'klasy'. Może to wpłynąć na generowanie profili."
+                f"Ostrzeżenie: Brak kolumny '{subj_col}' w danych klas. Może to wpłynąć na generowanie profili."
             )
 
 
@@ -93,11 +126,24 @@ def add_profile_column(df: pd.DataFrame):
     )
 
 
-def main():
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generuje wykresy PNG dla danych szkol."
+    )
+    parser.add_argument(
+        "--year", type=int, default=None, help="Rok danych do wizualizacji."
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     try:
-        xls_path = get_latest_xls(RESULTS, PATTERN)
+        xls_path = get_input_xls()
         print(f"Używam pliku: {xls_path}")
-        df_klasy, df_szkoly = load_excel_data(xls_path)
+        df_klasy, df_szkoly, selected_year = load_excel_data(xls_path, args.year)
+        if selected_year is not None:
+            print(f"Rok danych wizualizacji: {selected_year}")
 
         ensure_subject_columns(df_klasy)
         add_profile_column(df_klasy)
@@ -164,7 +210,7 @@ def main():
         if fig:
             save_fig(fig, "scatter_hidden_gems.png")
 
-        print("Gotowe – PNG-i w katalogu results/")
+        print("Gotowe - PNG-i w katalogu results/")
     except Exception as e:
         print(f"Błąd podczas generowania wizualizacji: {e}")
 
