@@ -10,7 +10,7 @@ matplotlib
 seaborn
 folium
 altair
-streamlit>1.27
+streamlit>=1.56
 streamlit-folium
 numpy
 pytest

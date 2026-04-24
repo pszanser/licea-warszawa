@@ -5,7 +5,7 @@ połączenia z danymi o progach punktowych z poprzednich lat,
 rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps komunikają miejską
 oraz generowania różnorodnych wizualizacji ułatwiających analizę.
 
-**Interaktywna mapa** i wizualizację są dostępne na https://licea-warszawa-2025.streamlit.app/
+**Interaktywna mapa** i wizualizację są dostępne na https://licea-warszawa.streamlit.app/
 
 Posty na LinkedIn o procesie tworzenia:  
 [1 - Python -> Excel](https://www.linkedin.com/posts/pszanser_sgh-liceum-edukacja-activity-7323984277598040065-8DO0)  

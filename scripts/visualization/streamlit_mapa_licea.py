@@ -639,7 +639,7 @@ def main():
                         schools_summary_df["Ranking"], errors="coerce"
                     )
 
-                st.dataframe(schools_summary_df, use_container_width=True)
+                st.dataframe(schools_summary_df, width="stretch")
 
     with tab_viz:
         if show_histogram:
