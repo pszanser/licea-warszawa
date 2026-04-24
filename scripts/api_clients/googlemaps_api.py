@@ -29,7 +29,7 @@ def get_travel_time(
         duration_min = round(duration_sec / 60)
         time.sleep(sleep_s)
         return duration_min
-    except:
+    except Exception:
         return None
 
 

@@ -1,6 +1,5 @@
 import pytest
 import datetime
-import unicodedata
 from scripts.main import normalize_name, get_school_type, extract_class_type
 from scripts.api_clients.googlemaps_api import get_next_weekday_time
 
