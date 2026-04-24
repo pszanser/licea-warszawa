@@ -1,9 +1,11 @@
 import pandas as pd
 
 from scripts.pipeline import (
+    add_common_class_columns,
     apply_latest_rankings,
     best_thresholds_for_keys,
     historical_school_thresholds,
+    merge_existing_year_sheets,
     school_threshold_summary,
     school_ranking_summary,
 )
@@ -129,3 +131,49 @@ def test_apply_latest_rankings_keeps_year_rank_and_sets_latest_rank():
     assert school["RankingRok"] == 2026
     assert school["Ranking_historyczny_szkola"] == "2026: 4; 2025: 8"
     assert class_row["RankingPoz"] == 4
+
+
+def test_add_common_class_columns_preserves_existing_class_type():
+    classes = pd.DataFrame(
+        {
+            "OddzialNazwa": ["plan O", "1A [D] mat-fiz"],
+            "TypOddzialu": ["O", pd.NA],
+            "PrzedmiotyRozszerzone": ["", "matematyka, fizyka"],
+        }
+    )
+
+    result = add_common_class_columns(classes)
+
+    assert result["TypOddzialu"].tolist() == ["O", "D"]
+
+
+def test_merge_existing_year_sheets_preserves_other_years_and_year_rank():
+    existing_sheets = {
+        "schools": pd.DataFrame(
+            {
+                "SzkolaIdentyfikator": ["lo_1"],
+                "year": [2025],
+                "RankingPoz": [4],
+                "RankingPozRokuDanych": [8],
+            }
+        ),
+        "metadata": pd.DataFrame({"year": [2025], "data_status": ["full"]}),
+    }
+    new_sheets = {
+        "schools": pd.DataFrame(
+            {
+                "SzkolaIdentyfikator": ["lo_2"],
+                "year": [2026],
+                "RankingPoz": [20],
+            }
+        ),
+        "metadata": pd.DataFrame({"year": [2026], "data_status": ["planned_offer"]}),
+    }
+
+    result = merge_existing_year_sheets(existing_sheets, new_sheets, {2026})
+
+    assert result["metadata"]["year"].tolist() == [2025, 2026]
+    schools = result["schools"].sort_values("year").reset_index(drop=True)
+    assert schools["year"].tolist() == [2025, 2026]
+    assert schools.loc[0, "RankingPoz"] == 8
+    assert "RankingPozRokuDanych" not in schools.columns

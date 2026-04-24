@@ -5,6 +5,7 @@ import pandas as pd
 from scripts.visualization.generate_map import (
     format_ranking_history_for_display,
     get_default_year,
+    get_subjects_from_dataframe,
 )
 
 
@@ -36,3 +37,15 @@ def test_format_ranking_history_for_display():
     assert (
         format_ranking_history_for_display("2026: 4; 2025: 8") == "4 (2026), 8 (2025)"
     )
+
+
+def test_get_subjects_from_dataframe_skips_empty_binary_columns():
+    classes = pd.DataFrame(
+        {
+            "matematyka": [0, 1],
+            "biologia": [0, 0],
+            "IdSzkoly": [pd.NA, pd.NA],
+        }
+    )
+
+    assert get_subjects_from_dataframe(classes) == ["matematyka"]

@@ -234,9 +234,9 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
     ]
     subject_cols = []
     for col in potential_subjects:
-        if df[col].dtype in ["int64", "float64"] and set(
-            df[col].dropna().unique()
-        ).issubset({0, 1}):
+        values = pd.to_numeric(df[col], errors="coerce")
+        non_null_values = set(values.dropna().unique())
+        if non_null_values.issubset({0, 1}) and values.fillna(0).sum() > 0:
             subject_cols.append(col)
     return sorted(subject_cols)
 

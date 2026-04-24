@@ -376,6 +376,73 @@ def apply_latest_rankings(sheets: dict[str, pd.DataFrame]) -> dict[str, pd.DataF
     return updated
 
 
+def read_app_workbook_sheets(path: Path) -> dict[str, pd.DataFrame]:
+    if not path.exists():
+        return {}
+    excel = pd.ExcelFile(path)
+    return {
+        sheet_name: pd.read_excel(excel, sheet_name=sheet_name)
+        for sheet_name in excel.sheet_names
+    }
+
+
+def restore_year_ranking_columns(sheet_name: str, df: pd.DataFrame) -> pd.DataFrame:
+    if sheet_name not in {"schools", "classes"} or df.empty:
+        return df
+
+    df = df.copy()
+    if "RankingPozRokuDanych" in df.columns:
+        df["RankingPoz"] = df["RankingPozRokuDanych"]
+    if "RankingPozTekstRokuDanych" in df.columns:
+        df["RankingPozTekst"] = df["RankingPozTekstRokuDanych"]
+    return df.drop(
+        columns=[
+            "RankingPozRokuDanych",
+            "RankingPozTekstRokuDanych",
+            "RankingPozNajnowszy",
+            "RankingPozTekstNajnowszy",
+            "RankingRok",
+            "Ranking_historyczny_szkola",
+            "Ranking_lata",
+        ],
+        errors="ignore",
+    )
+
+
+def merge_existing_year_sheets(
+    existing_sheets: dict[str, pd.DataFrame],
+    new_sheets: dict[str, pd.DataFrame],
+    replace_years: set[int],
+) -> dict[str, pd.DataFrame]:
+    merged_sheets = {}
+    sheet_names = list(new_sheets)
+    sheet_names.extend(name for name in existing_sheets if name not in new_sheets)
+    for sheet_name in sheet_names:
+        existing = restore_year_ranking_columns(
+            sheet_name, existing_sheets.get(sheet_name, pd.DataFrame())
+        )
+        new = new_sheets.get(sheet_name, pd.DataFrame())
+
+        if existing.empty:
+            merged_sheets[sheet_name] = new
+            continue
+        if new.empty and "year" not in existing.columns:
+            merged_sheets[sheet_name] = existing
+            continue
+        if "year" in existing.columns:
+            existing_year = pd.to_numeric(existing["year"], errors="coerce")
+            existing = existing[~existing_year.isin(replace_years)].copy()
+        if new.empty:
+            merged_sheets[sheet_name] = existing
+        elif existing.empty:
+            merged_sheets[sheet_name] = new
+        else:
+            merged_sheets[sheet_name] = pd.concat(
+                [existing, new], ignore_index=True, sort=False
+            )
+    return merged_sheets
+
+
 def threshold_meta(year_cfg: dict[str, Any]) -> dict[str, Any]:
     sources = threshold_sources(year_cfg)
     years = [
@@ -620,7 +687,12 @@ def add_common_class_columns(df_classes: pd.DataFrame) -> pd.DataFrame:
         .str.extract(r"\[[^\]]+\]\s*([^\(]+)")[0]
         .str.strip()
     )
-    df_classes["TypOddzialu"] = df_classes["OddzialNazwa"].apply(extract_class_type)
+    parsed_class_type = df_classes["OddzialNazwa"].apply(extract_class_type)
+    if "TypOddzialu" in df_classes.columns:
+        existing_class_type = df_classes["TypOddzialu"].replace("", pd.NA)
+        df_classes["TypOddzialu"] = existing_class_type.combine_first(parsed_class_type)
+    else:
+        df_classes["TypOddzialu"] = parsed_class_type
     if "JezykiObce" in df_classes.columns:
         df_classes["JezykiObce"] = (
             df_classes["JezykiObce"]
@@ -1006,6 +1078,7 @@ def export_app_workbook(
     datasets: list[dict[str, pd.DataFrame]],
     metadata: pd.DataFrame,
     quality: pd.DataFrame,
+    replace_years: set[int] | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1028,6 +1101,10 @@ def export_app_workbook(
         "thresholds": concat("thresholds"),
         "plan_naboru": concat("plan"),
     }
+    if replace_years:
+        sheets = merge_existing_year_sheets(
+            read_app_workbook_sheets(output_path), sheets, replace_years
+        )
     sheets = apply_latest_rankings(sheets)
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         for sheet_name, df in sheets.items():
@@ -1074,6 +1151,7 @@ def run_pipeline(year: int | None = None) -> Path:
         datasets=datasets,
         metadata=build_metadata(selected_configs),
         quality=pd.DataFrame(quality_rows),
+        replace_years={year} if year is not None else None,
     )
     return output_path
 
