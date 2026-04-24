@@ -168,6 +168,11 @@ python scripts/main.py --year 2026
     streamlit run scripts/visualization/streamlit_mapa_licea.py
     ```
 
+    W Codex App w oknie **Run** możesz użyć jednego polecenia:
+    ```powershell
+    scripts\dev\run_full_app.cmd
+    ```
+
 ## Główne funkcjonalności
 
 ### Przetwarzanie danych
