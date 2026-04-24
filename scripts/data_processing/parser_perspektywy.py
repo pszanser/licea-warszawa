@@ -1,8 +1,11 @@
 import html as html_lib
+import logging
 import re
 
 import pandas as pd
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 
 def _ranking_position_to_number(value):
@@ -16,9 +19,15 @@ def _strip_html(value: str) -> str:
 
 
 def _parse_embedded_astro_ranking(html_text: str, year: int | None):
-    """Parses the 2026 Perspektywy Astro payload embedded in HTML."""
+    """Parses the Perspektywy Astro payload embedded in HTML."""
     unescaped = html_lib.unescape(html_text)
-    year_key = str(year or 2026)
+    if year is None:
+        year_match = re.search(r'"(20\d{2})":\[0,', unescaped)
+        if year_match is None:
+            return pd.DataFrame()
+        year_key = year_match.group(1)
+    else:
+        year_key = str(year)
     pattern = re.compile(
         rf'"{year_key}":\[0,"?([^"\],]+)"?\]'
         r'.{0,500}?"name":\[0,"(.*?)"\]'
@@ -44,6 +53,11 @@ def _parse_embedded_astro_ranking(html_text: str, year: int | None):
                 "WSK": pd.to_numeric(wsk, errors="coerce"),
             }
         )
+    if not rows and year_key in unescaped and "dzielnica" in unescaped:
+        logger.warning(
+            "Nie znaleziono wierszy rankingu w osadzonym payloadzie Astro dla roku %s.",
+            year_key,
+        )
     return pd.DataFrame(rows)
 
 
@@ -62,9 +76,17 @@ def parse_ranking_perspektywy_html_text(html: str, year: int | None = None):
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if table is None:
-        return pd.DataFrame(
-            columns=["RankingPoz", "NazwaSzkoly", "Dzielnica", "Historia24", "WSK"]
-        )
+        columns = [
+            "RankingPoz",
+            "NazwaSzkoly",
+            "Dzielnica",
+            "Historia24",
+            "WSK",
+            "RankingPozTekst",
+        ]
+        if year is not None:
+            columns.append("year")
+        return pd.DataFrame(columns=columns)
     rows = table.find_all("tr")[1:]  # pomijamy nagłówek
     data = []
 
@@ -76,7 +98,7 @@ def parse_ranking_perspektywy_html_text(html: str, year: int | None = None):
         nazwa = cells[1].get_text(strip=True)
         dzielnica = cells[2].get_text(strip=True)
         hist24 = cells[3].get_text(strip=True) if len(cells) > 3 else ""
-        wsk = cells[6].get_text(strip=True) if len(cells) > 6 else ""
+        wsk = cells[-1].get_text(strip=True) if len(cells) > 4 else ""
 
         data.append([poz, nazwa, dzielnica, hist24, wsk])
 

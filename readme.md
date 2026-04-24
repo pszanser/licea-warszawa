@@ -70,13 +70,14 @@ Zapytaj Devina o to repozytorium:
 │   │   ├── get_data_vulcan_async.py
 │   │   ├── load_minimum_points.py
 │   │   └── parser_perspektywy.py
-│   ├── tests/                # Testy
+│   ├── tests/                # Starsze testy przy skryptach
 │   └── visualization/        # Skrypty do generowania wizualizacji i map
 │       ├── __init__.py
 │       ├── generate_map.py
 │       ├── generate_visuals.py
 │       ├── plots.py
 │       └── streamlit_mapa_licea.py
+├── tests/                # Główna suita testów pytest
 ├── requirements.txt      # Lista zależności Python
 └── README.md             # Ten plik
 ```

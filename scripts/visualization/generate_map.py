@@ -378,6 +378,8 @@ def aggregate_filtered_class_data(
                 "Prog_max_szkola": "max",  # Max próg szkoły (faktycznie klasy) z pasujących klas
                 "RankingPoz": "first",  # Ranking szkoły (jest taki sam dla wszystkich jej klas)
             }
+            if "RankingRok" in df_filtered_classes.columns:
+                agg_dict["RankingRok"] = "first"
             # Drop rows where any of the aggregation keys might be NaN before grouping
             # to avoid issues with groupby if these columns are not fully populated
             # However, typically SzkolaIdentyfikator should always be present.
@@ -443,7 +445,9 @@ def add_school_markers_to_map(
             popup_html += f"Ranking Perspektywy: {ranking_history}<br>"
         else:
             # Użyj rankingu z podsumowania przefiltrowanych klas, jeśli dostępne, inaczej z danych ogólnych szkoły.
-            ranking_year = row.get("RankingRok", row.get("year"))
+            ranking_year = summary.get(
+                "RankingRok", row.get("RankingRok", row.get("year"))
+            )
             ranking_poz = summary.get("RankingPoz", row.get("RankingPoz"))
             if pd.notna(ranking_poz):
                 display_ranking = (
@@ -495,13 +499,12 @@ def add_school_markers_to_map(
                 else:
                     line += class_name
 
-                if pd.notna(class_min_pkt):
-                    assert class_min_pkt is not None
+                if class_min_pkt is not None and pd.notna(class_min_pkt):
                     class_min_pkt_float = float(class_min_pkt)
                     formatted_min_pkt = (
                         int(class_min_pkt_float)
                         if class_min_pkt_float.is_integer()
-                        else class_min_pkt
+                        else class_min_pkt_float
                     )
                     line += f" (próg: {formatted_min_pkt} pkt)"
                 popup_html += line + "<br>"

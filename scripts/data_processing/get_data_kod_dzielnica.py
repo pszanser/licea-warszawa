@@ -16,8 +16,11 @@ def _rows_from_page(page: int) -> list[tuple[str, str]]:
         code_cell = tr.select_one("td.code-row")
         if code_cell is None:
             continue
+        cells = tr.select("td")
+        if len(cells) < 3:
+            continue
         kod = code_cell.text.strip()
-        dziel = tr.select("td")[2].text.strip()  # 3-cia kolumna
+        dziel = cells[2].text.strip()  # 3-cia kolumna
         rows.append((kod, dziel))
     return rows
 

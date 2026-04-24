@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from scripts.visualization.generate_map import (
+    aggregate_filtered_class_data,
     format_ranking_history_for_display,
     get_default_year,
     get_subjects_from_dataframe,
@@ -49,3 +50,23 @@ def test_get_subjects_from_dataframe_skips_empty_binary_columns():
     )
 
     assert get_subjects_from_dataframe(classes) == ["matematyka"]
+
+
+def test_aggregate_filtered_class_data_keeps_ranking_year():
+    classes = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_1"],
+            "OddzialNazwa": ["1A", "1B"],
+            "Prog_min_klasa": [120, 130],
+            "Prog_min_szkola": [120, 120],
+            "Prog_max_szkola": [130, 130],
+            "RankingPoz": [8, 8],
+            "RankingRok": [2026, 2026],
+        }
+    )
+    schools = pd.DataFrame({"SzkolaIdentyfikator": ["lo_1"]})
+
+    _, _, _, summary = aggregate_filtered_class_data(classes, schools, True)
+
+    assert summary["lo_1"]["RankingPoz"] == 8
+    assert summary["lo_1"]["RankingRok"] == 2026

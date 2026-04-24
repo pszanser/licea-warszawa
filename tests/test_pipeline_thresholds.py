@@ -5,6 +5,7 @@ from scripts.pipeline import (
     apply_latest_rankings,
     best_thresholds_for_keys,
     historical_school_thresholds,
+    load_thresholds,
     merge_existing_year_sheets,
     school_threshold_summary,
     school_ranking_summary,
@@ -145,6 +146,20 @@ def test_add_common_class_columns_preserves_existing_class_type():
     result = add_common_class_columns(classes)
 
     assert result["TypOddzialu"].tolist() == ["O", "D"]
+
+
+def test_load_thresholds_without_sources_returns_merge_schema():
+    result = load_thresholds({"year": 2027, "admission_year": 2027})
+
+    assert result.empty
+    assert {
+        "OddzialNazwa",
+        "Prog_min_klasa",
+        "SzkolaIdentyfikator",
+        "threshold_year",
+        "threshold_kind",
+        "threshold_label",
+    }.issubset(result.columns)
 
 
 def test_merge_existing_year_sheets_preserves_other_years_and_year_rank():

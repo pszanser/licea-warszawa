@@ -22,6 +22,17 @@ def _flatten_columns(columns) -> list[str]:
     return flattened
 
 
+def _find_column(columns, phrase: str) -> str:
+    phrase_lower = phrase.lower()
+    matches = [col for col in columns if phrase_lower in str(col).lower()]
+    if not matches:
+        available = ", ".join(str(col) for col in columns)
+        raise ValueError(
+            f"Brak kolumny planu naboru zawierającej '{phrase}'. Dostępne kolumny: {available}"
+        )
+    return matches[0]
+
+
 def _school_type_from_plan(value: str) -> str | None:
     value = str(value).strip()
     if value == "LO":
@@ -40,8 +51,8 @@ def load_plan_naboru(
     df_plan.columns = _flatten_columns(df_plan.columns)
     df_plan = df_plan.dropna(how="all").rename(columns=PLAN_COLUMN_RENAMES)
 
-    classes_col = next(col for col in df_plan.columns if "Liczba oddziałów" in str(col))
-    seats_col = next(col for col in df_plan.columns if "liczba miejsc" in str(col))
+    classes_col = _find_column(df_plan.columns, "liczba oddziałów")
+    seats_col = _find_column(df_plan.columns, "liczba miejsc")
     df_plan = df_plan.rename(
         columns={
             classes_col: "LiczbaOddzialowPlan",

@@ -5,6 +5,9 @@ from pathlib import Path
 import os
 import pandas as pd
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import sys
 
@@ -92,9 +95,9 @@ def load_excel_data(xls_path: Path, year: int | None = None):
             df_szkoly = df_szkoly[df_szkoly["year"].eq(selected_year)].copy()
     except Exception as e:
         print(
-            f"Ostrzezenie: Nie udalo sie wczytac arkusza szkol z pliku {xls_path}. {e}"
+            f"Ostrzeżenie: Nie udało się wczytać arkusza szkół z pliku {xls_path}. {e}"
         )
-        print("Heatmapy zalezne od danych szkol moga nie zostac wygenerowane.")
+        print("Heatmapy zależne od danych szkół mogą nie zostać wygenerowane.")
         df_szkoly = None
     return df_klasy, df_szkoly, selected_year
 
@@ -103,7 +106,7 @@ def ensure_subject_columns(df: pd.DataFrame):
     for subj_col in SUBJECTS:
         if subj_col not in df.columns:
             print(
-                f"Ostrzezenie: Brak kolumny '{subj_col}' w danych klas. Moze to wplynac na generowanie profili."
+                f"Ostrzeżenie: Brak kolumny '{subj_col}' w danych klas. Może to wpłynąć na generowanie profili."
             )
 
 
@@ -137,7 +140,7 @@ def main(argv: list[str] | None = None):
     args = parse_args(argv)
     try:
         xls_path = get_input_xls()
-        print(f"Uzywam pliku: {xls_path}")
+        print(f"Używam pliku: {xls_path}")
         df_klasy, df_szkoly, selected_year = load_excel_data(xls_path, args.year)
         if selected_year is not None:
             print(f"Rok danych wizualizacji: {selected_year}")
@@ -209,7 +212,7 @@ def main(argv: list[str] | None = None):
 
         print("Gotowe - PNG-i w katalogu results/")
     except Exception as e:
-        print(f"Blad podczas generowania wizualizacji: {e}")
+        print(f"Błąd podczas generowania wizualizacji: {e}")
 
 
 if __name__ == "__main__":

@@ -4,9 +4,6 @@ from itertools import combinations
 from pathlib import Path
 from typing import Optional
 
-import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -278,9 +275,13 @@ def bubble_prog_vs_dojazd(df_szkoly_param: pd.DataFrame):
         print("Bubble-chart: brak pełnych danych (próg + dojazd).")
         return None
     size = 1200 / (df["RankingPoz"].fillna(100) + 4)
-    palette = plt.get_cmap("tab20")(np.linspace(0, 1, 20))
-    dz_color = {d: c for d, c in zip(df["Dzielnica"].unique(), palette)}
-    c = df["Dzielnica"].map(dz_color)
+    districts = df["Dzielnica"].dropna().unique()
+    palette = [
+        tuple(color)
+        for color in plt.get_cmap("tab20")(np.linspace(0, 1, max(len(districts), 1)))
+    ]
+    dz_color = {d: c for d, c in zip(districts, palette)}
+    c = [dz_color.get(district, (0.5, 0.5, 0.5, 1.0)) for district in df["Dzielnica"]]
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.scatter(
         df["CzasDojazdu"],
@@ -292,7 +293,7 @@ def bubble_prog_vs_dojazd(df_szkoly_param: pd.DataFrame):
         linewidth=0.5,
     )
     ax.set_xlabel("Czas dojazdu [min]")
-    ax.set_ylabel("Próg punktowy 2024")
+    ax.set_ylabel("Próg punktowy")
     ax.set_title("Próg punktowy vs czas dojazdu (rozmiar = ranking)")
     ax.grid(True, alpha=0.2)
     plt.tight_layout()
@@ -463,7 +464,7 @@ def scatter_rank_vs_threshold(df_szkoly_param: pd.DataFrame):
     xp = np.linspace(df["RankingPoz"].min(), df["RankingPoz"].max(), 100)
     ax.plot(xp, np.polyval(z, xp), linestyle="--")
     ax.set_xlabel("Pozycja w rankingu (↓ = lepiej)")
-    ax.set_ylabel("Minimalny próg punktowy 2024")
+    ax.set_ylabel("Minimalny próg punktowy")
     ax.set_title("Ranking szkoły a minimalny próg punktowy")
     plt.tight_layout()
     return fig

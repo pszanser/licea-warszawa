@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from scripts.data_processing.load_plan_naboru import load_plan_naboru
 
@@ -41,3 +42,24 @@ def test_load_plan_naboru_multilevel_header(monkeypatch):
     assert result["LiczbaMiejscPlan"].tolist() == [64, 30]
     assert result["year"].tolist() == [2026, 2026]
     assert result["school_year"].tolist() == ["2026/2027", "2026/2027"]
+
+
+def test_load_plan_naboru_reports_missing_plan_columns(monkeypatch):
+    columns = pd.MultiIndex.from_tuples(
+        [
+            ("Dzielnica", "Unnamed: 0_level_1"),
+            ("Typ szkoły", "typ"),
+            ("Nazwa szkoły", "Unnamed: 2_level_1"),
+            ("Ulica", "Unnamed: 3_level_1"),
+            ("Typ oddziału", "Unnamed: 4_level_1"),
+        ]
+    )
+    mock_df = pd.DataFrame(
+        [["Bemowo", "LO", "LO nr 1", "Szkolna 1", "O"]],
+        columns=columns,
+    )
+
+    monkeypatch.setattr(pd, "read_excel", lambda *args, **kwargs: mock_df)
+
+    with pytest.raises(ValueError, match="liczba oddziałów"):
+        load_plan_naboru("plan.xlsx")

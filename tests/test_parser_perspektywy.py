@@ -30,6 +30,7 @@ def test_parse_ranking_perspektywy_html():
     assert df["RankingPoz"].tolist() == [1, 2]
     assert df["NazwaSzkoly"].tolist() == ["LO im. A", "LO im. B"]
     assert df["Dzielnica"].tolist() == ["Mokotów", "Wola"]
+    assert df["WSK"].tolist() == ["70", "60"]
 
 
 def test_parse_ranking_perspektywy_pdf(monkeypatch):
@@ -83,6 +84,23 @@ def test_parse_ranking_perspektywy_pdf(monkeypatch):
     assert df["RankingPoz"].tolist() == [1, 2]
     assert df["NazwaSzkoly"].tolist() == ["LO im. A", "LO im. B"]
     assert df["Dzielnica"].tolist() == ["Mokotów", "Wola"]
+
+
+def test_parse_ranking_perspektywy_html_without_table_keeps_schema():
+    df = parse_ranking_perspektywy_html_text(
+        "<html><body>brak tabeli</body></html>", year=2027
+    )
+
+    assert list(df.columns) == [
+        "RankingPoz",
+        "NazwaSzkoly",
+        "Dzielnica",
+        "Historia24",
+        "WSK",
+        "RankingPozTekst",
+        "year",
+    ]
+    assert df.empty
 
 
 def test_parse_ranking_perspektywy_html_embedded_payload():

@@ -335,7 +335,7 @@ def main():
         )
 
         progi_label = "Progi punktowe szkoły"
-        if pd.notna(threshold_label):
+        if pd.notna(threshold_label) and str(threshold_label).strip():
             progi_label = f"{progi_label} ({threshold_label})"
         st.subheader(progi_label)
         # checkbox, domyślnie False – filtr wyłączony

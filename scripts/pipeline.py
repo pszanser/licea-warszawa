@@ -37,6 +37,20 @@ PROJECT_CONFIG_FILE = SCRIPTS_DIR / "config" / "config.yml"
 KODY_FILE = DATA_DIR / "reference" / "waw_kod_dzielnica.csv"
 CZASY_DOJAZDU_FILE = RESULTS_DIR / "czasy_dojazdu.xlsx"
 LEGACY_APP_FILE = RESULTS_DIR / "LO_Warszawa_2025_Warszawa_SL.xlsx"
+THRESHOLD_COLUMNS = [
+    "NazwaSzkoly",
+    "OddzialNazwa",
+    "Prog_min_klasa",
+    "threshold_year",
+    "threshold_kind",
+    "threshold_priority",
+    "threshold_label",
+    "threshold_source",
+    "SzkolaIdentyfikator",
+    "year",
+    "admission_year",
+    "school_year",
+]
 
 REPL = {
     r"liceum og[oó]lnokszta[łl]c[a-ząćęłńóśźż]*": "lo",
@@ -131,7 +145,7 @@ def threshold_sources(year_cfg: dict[str, Any]) -> list[dict[str, Any]]:
 def load_thresholds(year_cfg: dict[str, Any]) -> pd.DataFrame:
     sources = threshold_sources(year_cfg)
     if not sources:
-        return pd.DataFrame(columns=["NazwaSzkoly", "OddzialNazwa", "Prog_min_klasa"])
+        return pd.DataFrame(columns=THRESHOLD_COLUMNS)
 
     frames = []
     for source in sources:
@@ -507,7 +521,10 @@ def load_location_cache() -> pd.DataFrame:
             excel = pd.ExcelFile(path)
             sheet = "schools" if "schools" in excel.sheet_names else "szkoly"
             df = pd.read_excel(excel, sheet_name=sheet)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "Nie udało się wczytać cache lokalizacji z %s: %s", path, exc
+            )
             continue
         cols = [
             col
@@ -592,52 +609,59 @@ def attach_location_data(
     if should_fetch:
         try:
             import googlemaps
-
-            df_schools["PelenAdres"] = (
-                df_schools["NazwaSzkoly"].str.strip()
-                + ", "
-                + df_schools["AdresSzkoly"].str.strip()
-            )
-            addresses = df_schools["PelenAdres"].dropna().unique().tolist()
-            client = googlemaps.Client(key=api_key)
-            departure_timestamp = get_next_weekday_time(
-                cfg.get("departure_hour", 7), cfg.get("departure_minute", 30)
-            )
-            travel_times = {}
-            batch_size = cfg.get("googlemaps_batch_size", 25)
-            for i in range(0, len(addresses), batch_size):
-                batch = addresses[i : i + batch_size]
-                travel_times.update(
-                    get_travel_times_batch(
-                        gmaps=client,
-                        origin_address=cfg["adres_domowy"],
-                        destination_addresses=batch,
-                        mode="transit",
-                        departure_time=departure_timestamp,
-                    )
-                )
-                time.sleep(0.25)
-            coordinates = get_coordinates_for_addresses_batch(client, addresses)
-            df_schools["CzasDojazdu"] = df_schools["PelenAdres"].map(travel_times)
-            df_schools["SzkolaLat"] = df_schools["PelenAdres"].map(
-                lambda addr: coordinates.get(addr, (None, None))[0]
-            )
-            df_schools["SzkolaLon"] = df_schools["PelenAdres"].map(
-                lambda addr: coordinates.get(addr, (None, None))[1]
-            )
-            df_schools.drop(columns=["PelenAdres"], inplace=True)
-            df_schools[
-                [
-                    "SzkolaIdentyfikator",
-                    "AdresSzkoly",
-                    "CzasDojazdu",
-                    "SzkolaLat",
-                    "SzkolaLon",
-                ]
-            ].drop_duplicates().to_excel(CZASY_DOJAZDU_FILE, index=False)
-            return df_schools
         except ImportError:
-            logger.warning("Brak pakietu googlemaps; uzywam cache lokalizacji.")
+            logger.warning("Brak pakietu googlemaps; używam cache lokalizacji.")
+        else:
+            try:
+                df_schools["PelenAdres"] = (
+                    df_schools["NazwaSzkoly"].str.strip()
+                    + ", "
+                    + df_schools["AdresSzkoly"].str.strip()
+                )
+                addresses = df_schools["PelenAdres"].dropna().unique().tolist()
+                client = googlemaps.Client(key=api_key)
+                departure_timestamp = get_next_weekday_time(
+                    cfg.get("departure_hour", 7), cfg.get("departure_minute", 30)
+                )
+                travel_times = {}
+                batch_size = cfg.get("googlemaps_batch_size", 25)
+                for i in range(0, len(addresses), batch_size):
+                    batch = addresses[i : i + batch_size]
+                    travel_times.update(
+                        get_travel_times_batch(
+                            gmaps=client,
+                            origin_address=cfg["adres_domowy"],
+                            destination_addresses=batch,
+                            mode="transit",
+                            departure_time=departure_timestamp,
+                        )
+                    )
+                    time.sleep(0.25)
+                coordinates = get_coordinates_for_addresses_batch(client, addresses)
+                df_schools["CzasDojazdu"] = df_schools["PelenAdres"].map(travel_times)
+                df_schools["SzkolaLat"] = df_schools["PelenAdres"].map(
+                    lambda addr: coordinates.get(addr, (None, None))[0]
+                )
+                df_schools["SzkolaLon"] = df_schools["PelenAdres"].map(
+                    lambda addr: coordinates.get(addr, (None, None))[1]
+                )
+                df_schools.drop(columns=["PelenAdres"], inplace=True)
+                df_schools[
+                    [
+                        "SzkolaIdentyfikator",
+                        "AdresSzkoly",
+                        "CzasDojazdu",
+                        "SzkolaLat",
+                        "SzkolaLon",
+                    ]
+                ].drop_duplicates().to_excel(CZASY_DOJAZDU_FILE, index=False)
+                return df_schools
+            except Exception as exc:
+                logger.warning(
+                    "Błąd przy pobieraniu danych Google Maps (%s); używam cache lokalizacji.",
+                    exc,
+                )
+                df_schools.drop(columns=["PelenAdres"], errors="ignore", inplace=True)
 
     if location_cache is None or location_cache.empty:
         if CZASY_DOJAZDU_FILE.exists():
@@ -709,7 +733,7 @@ def add_common_class_columns(df_classes: pd.DataFrame) -> pd.DataFrame:
     if "PrzedmiotyRozszerzone" not in df_classes.columns:
         df_classes["PrzedmiotyRozszerzone"] = ""
     for subject in ALL_SUBJECTS:
-        pattern = rf"(?i)\b{subject}\b"
+        pattern = rf"(?i)\b{re.escape(subject)}\b"
         df_classes[subject] = (
             df_classes["PrzedmiotyRozszerzone"]
             .fillna("")
@@ -1144,6 +1168,7 @@ def run_pipeline(year: int | None = None) -> Path:
         quality_rows.append(
             validate_year_data(year_cfg, dataset["schools"], dataset["classes"])
         )
+        location_cache = load_location_cache()
 
     output_path = resolve_path(sources["app_data_file"])
     export_app_workbook(
