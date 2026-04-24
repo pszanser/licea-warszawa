@@ -1,10 +1,10 @@
-from scripts.visualization.redirect_2025 import NEW_URL, build_redirect_html
+from scripts.visualization.redirect_2025 import NEW_URL, build_notice_markdown
 
 
-def test_redirect_2025_html_points_to_new_app():
-    html = build_redirect_html()
+def test_redirect_2025_notice_points_to_new_app_without_auto_redirect():
+    notice = build_notice_markdown()
 
     assert NEW_URL == "https://licea-warszawa.streamlit.app/"
-    assert f'window.location.replace("{NEW_URL}")' in html
-    assert f'href="{NEW_URL}"' in html
-    assert "<noscript>" in html
+    assert f"[{NEW_URL}]({NEW_URL})" in notice
+    assert "window.location" not in notice
+    assert "<script" not in notice
