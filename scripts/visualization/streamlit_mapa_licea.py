@@ -96,6 +96,94 @@ from visualization.generate_map import (
     add_school_markers_to_map,
 )
 from visualization import plots
+from analysis.score import (
+    add_distance_from_point,
+    score_personalized_classes,
+    select_start_point,
+    shortlist_schools_by_distance,
+)
+
+FIT_DISPLAY_COLUMNS = {
+    "FitScore": "Dopasowanie",
+    "RankingScore": "Ranking pkt",
+    "AdmissionScore": "Próg pkt",
+    "DistanceScore": "Bliskość pkt",
+    "ProfileScore": "Profil pkt",
+    "Dlaczego": "Dlaczego",
+    "NazwaSzkoly": "Szkoła",
+    "OddzialNazwa": "Klasa",
+    "OdlegloscKm": "Odległość km",
+    "AdmitMargin": "Margines pkt",
+    "RyzykoProgu": "Ryzyko progu",
+    "RankingPoz": "Ranking",
+    "MinProg": "Próg",
+    "Dzielnica": "Dzielnica",
+    "PrzedmiotyRozszerzone": "Rozszerzenia",
+}
+FIT_CLICKED_START_POINT_KEY = "fit_clicked_start_point"
+FIT_CENTER_START_POINT_KEY = "fit_center_start_point"
+FIT_SCHOOL_SUMMARY_COLUMNS = [
+    "FitScore",
+    "NazwaSzkoly",
+    "Dzielnica",
+    "OddzialNazwa",
+    "Liczba pasujących klas",
+    "OdlegloscKm",
+    "RankingScore",
+    "AdmissionScore",
+    "DistanceScore",
+    "ProfileScore",
+    "RankingPoz",
+    "MinProg",
+    "AdmitMargin",
+    "RyzykoProgu",
+    "PrzedmiotyRozszerzone",
+    "Dlaczego",
+]
+
+
+def _remember_start_point(key: str, point: tuple[float, float]) -> None:
+    st.session_state[key] = (float(point[0]), float(point[1]))
+
+
+def _get_remembered_start_point(key: str) -> tuple[float, float] | None:
+    value = st.session_state.get(key)
+    if not isinstance(value, (tuple, list)) or len(value) != 2:
+        return None
+    try:
+        return float(value[0]), float(value[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_start_point(point: tuple[float, float]) -> str:
+    return f"{point[0]:.5f}, {point[1]:.5f}"
+
+
+def _summarize_best_schools_for_display(fit_results: pd.DataFrame) -> pd.DataFrame:
+    """Buduje tabelę szkół bez zależności od świeżo przeładowanego modułu score."""
+    if fit_results.empty:
+        return fit_results.iloc[0:0].copy()
+
+    counts = (
+        fit_results.groupby("SzkolaIdentyfikator")
+        .size()
+        .rename("Liczba pasujących klas")
+        .reset_index()
+    )
+    best_schools = (
+        fit_results.sort_values("FitScore", ascending=False, na_position="last")
+        .groupby("SzkolaIdentyfikator", as_index=False)
+        .first()
+    )
+    best_schools = best_schools.merge(counts, on="SzkolaIdentyfikator", how="left")
+    best_schools = best_schools.sort_values(
+        "FitScore", ascending=False, na_position="last"
+    )
+    summary_cols = [
+        col for col in FIT_SCHOOL_SUMMARY_COLUMNS if col in best_schools.columns
+    ]
+    return best_schools[summary_cols].copy()
 
 
 def create_schools_map_streamlit(
@@ -164,9 +252,11 @@ def load_all_data(
 
 def main():
     st.title("🏫 Mapa szkół średnich - Warszawa i okolice")
-    st.markdown("""
+    st.markdown(
+        """
     Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
-    """)
+    """
+    )
 
     # Initialize session state for filters if not already set
     # Używamy globalnego FILTER_DEFAULTS
@@ -553,11 +643,22 @@ def main():
             else:
                 st.metric("**Średni próg (pasujące klasy)**", "N/A")
 
-    tab_map, tab_viz = st.tabs(["🗺️Mapa", "📊Wizualizacje"])
+    tab_map, tab_fit, tab_viz = st.tabs(
+        ["🗺️Mapa", "🎯Moje dopasowanie", "📊Wizualizacje"]
+    )
 
     with tab_map:
         st.subheader("Mapa szkół")
-        st_folium(map_object, width=None, height=600, returned_objects=[])
+        map_state = st_folium(
+            map_object,
+            width=None,
+            height=600,
+            returned_objects=["last_clicked", "center", "zoom"],
+            key="schools_map",
+        )
+        clicked_start_point = select_start_point(map_state, allow_center=False)
+        if clicked_start_point is not None:
+            _remember_start_point(FIT_CLICKED_START_POINT_KEY, clicked_start_point)
 
         if not df_filtered_classes.empty:
             buf = io.BytesIO()
@@ -640,6 +741,336 @@ def main():
                     )
 
                 st.dataframe(schools_summary_df, width="stretch")
+
+    with tab_fit:
+        st.subheader("Moje dopasowanie")
+        st.caption(
+            "Pierwsza wersja używa odległości w linii prostej od wybranego punktu. "
+            "Nie jest to jeszcze dokładny czas dojazdu."
+        )
+
+        if df_filtered_classes.empty or df_schools_to_display.empty:
+            st.info("Najpierw dobierz filtry tak, aby zostały pasujące klasy.")
+        else:
+            start_source = st.radio(
+                "Punkt startowy",
+                ["Kliknięty punkt na mapie", "Środek aktualnego widoku mapy"],
+                horizontal=True,
+            )
+            allow_center = start_source == "Środek aktualnego widoku mapy"
+            current_center_point = select_start_point(
+                {"center": (map_state or {}).get("center")},
+                allow_center=True,
+            )
+            if allow_center:
+                center_col, clear_col = st.columns([2, 1])
+                with center_col:
+                    if st.button(
+                        "Użyj aktualnego środka mapy",
+                        disabled=current_center_point is None,
+                    ):
+                        if current_center_point is not None:
+                            _remember_start_point(
+                                FIT_CENTER_START_POINT_KEY, current_center_point
+                            )
+                            st.rerun()
+                with clear_col:
+                    if st.button("Wyczyść punkt", key="clear_center_start_point"):
+                        st.session_state.pop(FIT_CENTER_START_POINT_KEY, None)
+                        st.rerun()
+                start_point = _get_remembered_start_point(FIT_CENTER_START_POINT_KEY)
+            else:
+                clear_col, _ = st.columns([1, 3])
+                with clear_col:
+                    if st.button("Wyczyść punkt", key="clear_clicked_start_point"):
+                        st.session_state.pop(FIT_CLICKED_START_POINT_KEY, None)
+                        st.rerun()
+                start_point = _get_remembered_start_point(FIT_CLICKED_START_POINT_KEY)
+
+            if start_point is None:
+                if allow_center:
+                    st.info(
+                        "Przejdź do mapy, ustaw widok lub użyj kontrolki lokalizacji, "
+                        "a potem wróć tutaj i kliknij „Użyj aktualnego środka mapy”."
+                    )
+                else:
+                    st.info("Przejdź do mapy i kliknij punkt startowy.")
+            else:
+                start_lat, start_lon = start_point
+                st.caption(
+                    f"Zapamiętany punkt startowy: {_format_start_point(start_point)}. "
+                    "Odległość liczona jest lokalnie po współrzędnych szkół."
+                )
+
+                settings_col, weights_col = st.columns([1, 2])
+                with settings_col:
+                    predicted_points = st.number_input(
+                        "Przewidywana liczba punktów",
+                        min_value=0.0,
+                        max_value=300.0,
+                        value=170.0,
+                        step=1.0,
+                    )
+                    max_distance_km = st.select_slider(
+                        "Maksymalna odległość km",
+                        options=[3, 5, 8, 12, 15, 20, 25],
+                        value=8,
+                        help=(
+                            "Twardy filtr: szkoły dalej od punktu startowego "
+                            "nie wchodzą do dopasowania."
+                        ),
+                    )
+                    shortlist_limit = st.slider(
+                        "Liczba najbliższych szkół",
+                        min_value=10,
+                        max_value=100,
+                        value=40,
+                        step=5,
+                        help=(
+                            "Dodatkowy limit po zastosowaniu maksymalnej odległości."
+                        ),
+                    )
+
+                with weights_col:
+                    st.markdown("**Ważność kryteriów**")
+                    w_col1, w_col2, w_col3, w_col4 = st.columns(4)
+                    with w_col1:
+                        weight_ranking = st.slider(
+                            "Ranking",
+                            0,
+                            10,
+                            6,
+                            key="fit_weight_ranking",
+                            help="Im wyżej, tym mocniej liczy się pozycja szkoły w rankingu.",
+                        )
+                    with w_col2:
+                        weight_admission = st.slider(
+                            "Próg",
+                            0,
+                            10,
+                            8,
+                            key="fit_weight_admission",
+                            help="Im wyżej, tym mocniej liczy się margines między punktami ucznia a progiem klasy.",
+                        )
+                    with w_col3:
+                        weight_distance = st.slider(
+                            "Bliskość",
+                            0,
+                            10,
+                            7,
+                            key="fit_weight_distance",
+                            help="Im wyżej, tym mocniej liczy się odległość w linii prostej od punktu startowego.",
+                        )
+                    with w_col4:
+                        weight_profile = st.slider(
+                            "Profil",
+                            0,
+                            10,
+                            0,
+                            key="fit_weight_profile_disabled",
+                            disabled=True,
+                            help="Profil jest już uwzględniany przez filtr rozszerzeń po lewej.",
+                        )
+
+                weights = {
+                    "ranking": weight_ranking,
+                    "admission": weight_admission,
+                    "distance": weight_distance,
+                    "profile": weight_profile,
+                }
+                weight_labels = {
+                    "ranking": "ranking",
+                    "admission": "próg",
+                    "distance": "bliskość",
+                    "profile": "profil",
+                }
+                active_weights = {
+                    key: value
+                    for key, value in weights.items()
+                    if value > 0 and key != "profile"
+                }
+                active_weight_sum = sum(active_weights.values())
+                if active_weight_sum <= 0:
+                    st.warning("Ustaw co najmniej jedną wagę większą od zera.")
+                else:
+                    weight_parts = [
+                        f"{weight_labels[key]} {value / active_weight_sum:.0%}"
+                        for key, value in active_weights.items()
+                    ]
+                    st.caption("Aktywne wagi w tym widoku: " + ", ".join(weight_parts))
+                    if wanted_subjects_filter:
+                        st.caption(
+                            "Profil jest traktowany jako filtr: "
+                            + ", ".join(wanted_subjects_filter)
+                        )
+                    else:
+                        st.caption(
+                            "Profil jest wyłączony, bo nie wybrano poszukiwanych "
+                            "rozszerzeń w filtrach głównych."
+                        )
+                    schools_with_distance = add_distance_from_point(
+                        df_schools_to_display, start_lat, start_lon
+                    )
+                    shortlisted_schools = shortlist_schools_by_distance(
+                        schools_with_distance,
+                        limit=shortlist_limit,
+                        max_distance_km=max_distance_km,
+                    )
+
+                    if shortlisted_schools.empty:
+                        st.warning(
+                            "Brak szkół ze współrzędnymi w aktualnym zestawie filtrów "
+                            f"i promieniu do {max_distance_km} km."
+                        )
+                    else:
+                        shortlisted_ids = shortlisted_schools[
+                            "SzkolaIdentyfikator"
+                        ].tolist()
+                        distance_cols = shortlisted_schools[
+                            ["SzkolaIdentyfikator", "OdlegloscKm"]
+                        ].drop_duplicates("SzkolaIdentyfikator")
+                        classes_for_fit = df_filtered_classes[
+                            df_filtered_classes["SzkolaIdentyfikator"].isin(
+                                shortlisted_ids
+                            )
+                        ].copy()
+                        classes_for_fit = classes_for_fit.drop(
+                            columns=["OdlegloscKm"], errors="ignore"
+                        ).merge(
+                            distance_cols,
+                            on="SzkolaIdentyfikator",
+                            how="left",
+                        )
+
+                        fit_results = score_personalized_classes(
+                            classes_for_fit,
+                            points=predicted_points,
+                            weights=weights,
+                            profile_subjects=wanted_subjects_filter,
+                        )
+
+                        st.metric(
+                            "Szkoły w shortliście",
+                            f"{len(shortlisted_schools)} / {len(df_schools_to_display)}",
+                        )
+                        st.caption(
+                            f"Uwzględniono szkoły do {max_distance_km} km od punktu "
+                            f"startowego, maksymalnie {shortlist_limit} najbliższych."
+                        )
+
+                        top_results = fit_results.head(50).copy()
+                        display_cols = [
+                            col
+                            for col in FIT_DISPLAY_COLUMNS
+                            if col in top_results.columns
+                        ]
+                        display_df = top_results[display_cols].rename(
+                            columns=FIT_DISPLAY_COLUMNS
+                        )
+                        for col in ["Ranking", "Próg", "Margines pkt"]:
+                            if col in display_df.columns:
+                                display_df[col] = pd.to_numeric(
+                                    display_df[col], errors="coerce"
+                                ).round(0)
+                        score_cols = [
+                            "Odległość km",
+                            "Dopasowanie",
+                            "Ranking pkt",
+                            "Próg pkt",
+                            "Bliskość pkt",
+                            "Profil pkt",
+                        ]
+                        for col in score_cols:
+                            if col in display_df.columns:
+                                display_df[col] = pd.to_numeric(
+                                    display_df[col], errors="coerce"
+                                ).round(1)
+
+                        st.markdown("**Najlepsze klasy dla mnie**")
+                        st.dataframe(display_df, width="stretch", hide_index=True)
+
+                        school_summary = pd.DataFrame()
+                        if not fit_results.empty:
+                            school_summary = _summarize_best_schools_for_display(
+                                fit_results
+                            ).rename(
+                                columns={
+                                    "FitScore": "Dopasowanie",
+                                    "NazwaSzkoly": "Szkoła",
+                                    "Dzielnica": "Dzielnica",
+                                    "OddzialNazwa": "Najlepsza klasa",
+                                    "Liczba pasujących klas": "Pasujące klasy",
+                                    "OdlegloscKm": "Odległość km",
+                                    "RankingScore": "Ranking pkt",
+                                    "AdmissionScore": "Próg pkt",
+                                    "DistanceScore": "Bliskość pkt",
+                                    "ProfileScore": "Profil pkt",
+                                    "RankingPoz": "Ranking",
+                                    "MinProg": "Próg",
+                                    "AdmitMargin": "Margines pkt",
+                                    "RyzykoProgu": "Ryzyko progu",
+                                    "PrzedmiotyRozszerzone": "Rozszerzenia",
+                                    "Dlaczego": "Dlaczego",
+                                }
+                            )
+                            for col in ["Ranking", "Próg", "Margines pkt"]:
+                                if col in school_summary.columns:
+                                    school_summary[col] = pd.to_numeric(
+                                        school_summary[col], errors="coerce"
+                                    ).round(0)
+                            for col in score_cols:
+                                if col in school_summary.columns:
+                                    school_summary[col] = pd.to_numeric(
+                                        school_summary[col], errors="coerce"
+                                    ).round(1)
+
+                            with st.expander("Najlepsze szkoły", expanded=False):
+                                st.dataframe(
+                                    school_summary.head(20),
+                                    width="stretch",
+                                    hide_index=True,
+                                )
+
+                        export_params = export_filter_entries + [
+                            (
+                                "Punkt startowy",
+                                f"{start_lat:.6f}, {start_lon:.6f}",
+                            ),
+                            ("Źródło punktu", start_source),
+                            ("Przewidywane punkty", predicted_points),
+                            ("Maksymalna odległość km", max_distance_km),
+                            ("Limit shortlisty szkół", shortlist_limit),
+                            ("Waga ranking", weight_ranking),
+                            ("Waga próg", weight_admission),
+                            ("Waga bliskość", weight_distance),
+                            ("Waga profil", weight_profile),
+                            (
+                                "Rozszerzenia dla profilu",
+                                ", ".join(wanted_subjects_filter) or "brak",
+                            ),
+                        ]
+                        fit_buf = io.BytesIO()
+                        with pd.ExcelWriter(fit_buf, engine="openpyxl") as writer:
+                            fit_results.to_excel(
+                                writer, index=False, sheet_name="Klasy"
+                            )
+                            if not school_summary.empty:
+                                school_summary.to_excel(
+                                    writer, index=False, sheet_name="Szkoly"
+                                )
+                            shortlisted_schools.to_excel(
+                                writer, index=False, sheet_name="Szkoly_shortlista"
+                            )
+                            pd.DataFrame(
+                                export_params, columns=["Parametr", "Wartość"]
+                            ).to_excel(writer, index=False, sheet_name="Parametry")
+                        fit_buf.seek(0)
+                        st.download_button(
+                            label="📥Pobierz moje dopasowanie (Excel)",
+                            data=fit_buf,
+                            file_name=f"moje_dopasowanie_{selected_year}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
 
     with tab_viz:
         if show_histogram:
