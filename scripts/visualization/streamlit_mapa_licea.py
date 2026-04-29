@@ -426,7 +426,7 @@ def create_schools_map_streamlit(
     return m
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def get_unique_school_names(df_schools):
     """
     Get sorted unique school names from the dataframe.
@@ -442,7 +442,42 @@ def get_filter_ranking_year(df_schools: pd.DataFrame, fallback_year: int) -> int
     return int(years.max()) if not years.empty else int(fallback_year)
 
 
-@st.cache_data
+@st.cache_data(ttl=60, show_spinner=False)
+def get_app_or_latest_xls_file_cached(directory: Path) -> Path | None:
+    return get_app_or_latest_xls_file(directory)
+
+
+@st.cache_data(show_spinner=False)
+def get_available_years_cached(excel_file: Path, data_version: int) -> list[int]:
+    _ = data_version
+    return get_available_years(excel_file)
+
+
+@st.cache_data(show_spinner=False)
+def get_default_year_cached(
+    excel_file: Path, data_version: int, available_years: tuple[int, ...]
+) -> int:
+    _ = data_version
+    return get_default_year(excel_file, list(available_years))
+
+
+@st.cache_data(show_spinner=False)
+def load_metadata_cached(
+    excel_file: Path, selected_year: int | None, data_version: int
+) -> pd.DataFrame:
+    _ = data_version
+    return load_metadata(excel_file, selected_year)
+
+
+@st.cache_data(show_spinner=False)
+def load_quality_cached(
+    excel_file: Path, selected_year: int | None, data_version: int
+) -> pd.DataFrame:
+    _ = data_version
+    return load_quality(excel_file, selected_year)
+
+
+@st.cache_data(show_spinner=False)
 def load_all_data(
     excel_file: Path, selected_year: int | None, data_version: int
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
@@ -887,13 +922,16 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    latest_excel_file = get_app_or_latest_xls_file(RESULTS_DIR)
+    latest_excel_file = get_app_or_latest_xls_file_cached(RESULTS_DIR)
     if not latest_excel_file:
         st.error("Nie można wygenerować mapy bez pliku danych.")
         return
 
-    available_years = get_available_years(latest_excel_file)
-    default_year = get_default_year(latest_excel_file, available_years)
+    data_version = latest_excel_file.stat().st_mtime_ns
+    available_years = get_available_years_cached(latest_excel_file, data_version)
+    default_year = get_default_year_cached(
+        latest_excel_file, data_version, tuple(available_years)
+    )
     selected_year_state = st.session_state.get("selected_year")
     if selected_year_state not in available_years:
         st.session_state.pop("selected_year", None)
@@ -910,14 +948,13 @@ def main():
         )
         render_release_notes_expander()
 
-    metadata = load_metadata(latest_excel_file, selected_year)
-    quality = load_quality(latest_excel_file, selected_year)
+    metadata = load_metadata_cached(latest_excel_file, selected_year, data_version)
+    quality = load_quality_cached(latest_excel_file, selected_year, data_version)
     meta_row = metadata.iloc[0].to_dict() if not metadata.empty else {}
     status_label = meta_row.get("status_label") or "dane historyczne"
     threshold_label = meta_row.get("threshold_label")
 
     # Dane wczytujemy z cache'em zależnym od czasu modyfikacji pliku.
-    data_version = latest_excel_file.stat().st_mtime_ns
     df_schools_raw, df_classes_raw = load_all_data(
         latest_excel_file, selected_year, data_version
     )
