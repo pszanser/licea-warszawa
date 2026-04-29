@@ -1416,7 +1416,8 @@ dopasowania).
             )
 
             geocoding_available = bool(os.environ.get("GOOGLE_MAPS_API_KEY"))
-            source_options = ["Klik na mapie", "Środek widoku mapy", "Adres"]
+            center_source_label = "Moja lokalizacja / środek mapy"
+            source_options = ["Klik na mapie", center_source_label, "Adres"]
             start_source = st.segmented_control(
                 "Skąd brać punkt startowy?",
                 options=source_options,
@@ -1424,7 +1425,9 @@ dopasowania).
                 key="fit_start_source",
                 help=(
                     "Klik na mapie zapamiętuje pinezkę z zakładki Mapa. "
-                    "Adres wymaga klucza GOOGLE_MAPS_API_KEY."
+                    "Moja lokalizacja używa środka aktualnego widoku - "
+                    "najpierw możesz kliknąć ikonę lokalizacji na mapie. "
+                    "Adres pozwala wpisać punkt startowy ręcznie."
                 ),
             )
             # segmented_control zwraca None gdy nic nie wybrane – traktujemy jak domyślny wybór.
@@ -1432,7 +1435,7 @@ dopasowania).
                 start_source = "Klik na mapie"
             _render_start_point_feedback()
 
-            if start_source == "Środek widoku mapy":
+            if start_source == center_source_label:
                 col_use, col_clear = st.columns([3, 2], vertical_alignment="bottom")
                 with col_use:
                     if st.button(
@@ -1448,11 +1451,11 @@ dopasowania).
                         if current_center_point is not None:
                             _remember_start_point(
                                 current_center_point,
-                                source="środek widoku mapy",
+                            source="moja lokalizacja / środek mapy",
                             )
                             _push_start_point_feedback(
                                 "success",
-                                "Ustawiono punkt startowy ze środka widoku mapy.",
+                            "Ustawiono punkt startowy z aktualnego środka mapy.",
                             )
                             st.rerun()
                 with col_clear:
@@ -1466,8 +1469,8 @@ dopasowania).
             elif start_source == "Adres":
                 if not geocoding_available:
                     st.warning(
-                        "Geokodowanie adresu nie działa: brak zmiennej "
-                        "`GOOGLE_MAPS_API_KEY`. Użyj kliku na mapie lub środka widoku."
+                        "Wyszukiwanie adresu jest chwilowo niedostępne. "
+                        "Użyj kliku na mapie albo środka aktualnego widoku."
                     )
                 # Form sprawia, że Enter w polu adresu od razu uruchamia szukanie
                 # (bez dodatkowego kroku „Press Enter to apply" + klik „Znajdź").
@@ -1545,10 +1548,10 @@ dopasowania).
 
             remembered = _get_remembered_start_point()
             if remembered is None:
-                if start_source == "Środek widoku mapy":
+                if start_source == center_source_label:
                     st.info(
-                        "Otwórz zakładkę 🗺️ Mapa, ustaw widok, wróć tutaj i kliknij "
-                        "„Użyj aktualnego środka mapy”."
+                        "Otwórz zakładkę 🗺️ Mapa, kliknij ikonę lokalizacji albo ustaw "
+                        "widok ręcznie, wróć tutaj i kliknij „Użyj aktualnego środka mapy”."
                     )
                 elif start_source == "Adres":
                     st.info("Wpisz adres i naciśnij Enter (lub kliknij „Znajdź”).")
