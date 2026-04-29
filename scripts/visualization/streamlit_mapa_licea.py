@@ -14,7 +14,6 @@ import pandas as pd
 import folium
 from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
-import streamlit.components.v1 as components
 import io
 
 ONBOARDING_COOKIE_NAME = "licea_onboarding_dismissed"
@@ -305,27 +304,27 @@ def _read_onboarding_cookie() -> bool:
 
 def _persist_onboarding_dismissal() -> None:
     """Zapisuje cookie w przeglądarce użytkownika, by onboarding pozostał ukryty
-    między wizytami. Cookie ustawiamy z poziomu iframe'a komponentu przez
-    `document.cookie`, a następnie best-effort także przez dokument rodzica.
-    To jest workaround dla read-only `st.context.cookies` i dla hostingów, gdzie
-    dostęp do `parent.document` może być ograniczony.
+    między wizytami.
+
+    Streamlit udostępnia `st.context.cookies` tylko do odczytu, więc zapis
+    robimy po stronie przeglądarki przez udokumentowane `st.html` z JavaScriptem.
+    W przeciwieństwie do starego `components.html`, `st.html` nie jest iframe'em,
+    więc zapis dotyczy właściwej domeny aplikacji na hostingu.
     """
-    components.html(
+    st.html(
         f"""
         <script>
         (function () {{
-            const cookie =
+            let cookie =
                 "{ONBOARDING_COOKIE_NAME}=1; max-age={ONBOARDING_COOKIE_MAX_AGE}; path=/; SameSite=Lax";
-            try {{
-                document.cookie = cookie;
-            }} catch (e) {{}}
-            try {{
-                window.parent.document.cookie = cookie;
-            }} catch (e) {{}}
+            if (window.location.protocol === "https:") {{
+                cookie += "; Secure";
+            }}
+            document.cookie = cookie;
         }})();
         </script>
         """,
-        height=0,
+        unsafe_allow_javascript=True,
     )
 
 
