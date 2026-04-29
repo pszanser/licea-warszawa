@@ -19,6 +19,8 @@ import io
 
 ONBOARDING_COOKIE_NAME = "licea_onboarding_dismissed"
 ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 rok
+ONBOARDING_DISMISSED_STATE_KEY = "onboarding_dismissed"
+ONBOARDING_COOKIE_PENDING_STATE_KEY = "onboarding_cookie_write_pending"
 
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
@@ -303,21 +305,34 @@ def _read_onboarding_cookie() -> bool:
 
 def _persist_onboarding_dismissal() -> None:
     """Zapisuje cookie w przeglądarce użytkownika, by onboarding pozostał ukryty
-    między wizytami. Cookie ustawiamy z poziomu iframe'a komponentu poprzez
-    `parent.document.cookie`, co jest standardowym workaroundem dla read-only
-    `st.context.cookies`.
+    między wizytami. Cookie ustawiamy z poziomu iframe'a komponentu przez
+    `document.cookie`, a następnie best-effort także przez dokument rodzica.
+    To jest workaround dla read-only `st.context.cookies` i dla hostingów, gdzie
+    dostęp do `parent.document` może być ograniczony.
     """
     components.html(
         f"""
         <script>
+        (function () {{
+            const cookie =
+                "{ONBOARDING_COOKIE_NAME}=1; max-age={ONBOARDING_COOKIE_MAX_AGE}; path=/; SameSite=Lax";
             try {{
-                parent.document.cookie =
-                    "{ONBOARDING_COOKIE_NAME}=1; max-age={ONBOARDING_COOKIE_MAX_AGE}; path=/; SameSite=Lax";
+                document.cookie = cookie;
             }} catch (e) {{}}
+            try {{
+                window.parent.document.cookie = cookie;
+            }} catch (e) {{}}
+        }})();
         </script>
         """,
         height=0,
     )
+
+
+def _dismiss_onboarding() -> None:
+    """Ukrywa przewodnik w bieżącej sesji i zleca zapis cookie w kolejnym renderze."""
+    st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = True
+    st.session_state[ONBOARDING_COOKIE_PENDING_STATE_KEY] = True
 
 
 def _summarize_best_schools_for_display(fit_results: pd.DataFrame) -> pd.DataFrame:
@@ -880,12 +895,11 @@ def main():
 
     available_years = get_available_years(latest_excel_file)
     default_year = get_default_year(latest_excel_file, available_years)
-    if (
-        "selected_year" not in st.session_state
-        or st.session_state["selected_year"] not in available_years
-    ):
-        st.session_state["selected_year"] = default_year
-    default_index = available_years.index(st.session_state["selected_year"])
+    selected_year_state = st.session_state.get("selected_year")
+    if selected_year_state not in available_years:
+        st.session_state.pop("selected_year", None)
+        selected_year_state = default_year
+    default_index = available_years.index(selected_year_state)
     with st.sidebar:
         st.header("Dane")
         selected_year = st.selectbox(
@@ -924,11 +938,14 @@ def main():
     # Onboarding - przewodnik dla nowych użytkowników. Domyślnie rozwinięty,
     # użytkownik świadomie zamyka go przyciskiem (zapis w session_state + cookie,
     # dzięki czemu preferencja pamięta się także między wizytami).
-    if "onboarding_dismissed" not in st.session_state:
-        st.session_state["onboarding_dismissed"] = _read_onboarding_cookie()
+    if ONBOARDING_DISMISSED_STATE_KEY not in st.session_state:
+        st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = _read_onboarding_cookie()
+    if st.session_state.pop(ONBOARDING_COOKIE_PENDING_STATE_KEY, False):
+        _persist_onboarding_dismissal()
+
     with st.expander(
         "👋 Pierwszy raz tutaj? Zobacz jak korzystać",
-        expanded=not st.session_state["onboarding_dismissed"],
+        expanded=not st.session_state[ONBOARDING_DISMISSED_STATE_KEY],
     ):
         st.markdown("""
 **Aplikacja pomaga wybrać szkołę średnią w 4 krokach:**
@@ -951,14 +968,14 @@ def main():
 początkowy. Wyniki możesz pobrać do Excela (przyciski pod mapą i pod tabelą
 dopasowania).
             """)
-        if st.button(
-            "✓ Rozumiem, ukryj ten przewodnik",
-            key="onboarding_dismiss_btn",
-            disabled=st.session_state["onboarding_dismissed"],
-        ):
-            st.session_state["onboarding_dismissed"] = True
-            _persist_onboarding_dismissal()
-            st.rerun()
+        if not st.session_state[ONBOARDING_DISMISSED_STATE_KEY]:
+            st.button(
+                "✓ Rozumiem, ukryj ten przewodnik",
+                key="onboarding_dismiss_btn",
+                on_click=_dismiss_onboarding,
+            )
+        else:
+            st.caption("Przewodnik jest ukryty przy kolejnych wejściach, ale możesz go rozwinąć tutaj w każdej chwili.")
 
     # prezentujemy nazwę tylko przy lokalnym uruchomieniu
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
