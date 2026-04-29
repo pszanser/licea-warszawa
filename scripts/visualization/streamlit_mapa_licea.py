@@ -113,6 +113,7 @@ FIT_DISPLAY_COLUMNS = {
     "RankingScore": "Ranking pkt",
     "AdmissionScore": "Próg pkt",
     "DistanceScore": "Bliskość pkt",
+    "ProfileScore": "Profil pkt",
     "BrakiDanych": "Braki danych",
     "Dlaczego": "Dlaczego",
     "NazwaSzkoly": "Szkoła",
@@ -152,6 +153,7 @@ FIT_SCHOOL_SUMMARY_COLUMNS = [
     "RankingScore",
     "AdmissionScore",
     "DistanceScore",
+    "ProfileScore",
     "RankingPoz",
     "MinProg",
     "AdmitMargin",
@@ -323,16 +325,25 @@ def _summarize_best_schools_for_display(fit_results: pd.DataFrame) -> pd.DataFra
     if fit_results.empty:
         return fit_results.iloc[0:0].copy()
 
+    required = {"SzkolaIdentyfikator", "FitScore"}
+    missing = required.difference(fit_results.columns)
+    if missing:
+        missing_text = ", ".join(sorted(missing))
+        raise ValueError(f"Brak kolumn do podsumowania szkół: {missing_text}")
+
     counts = (
         fit_results.groupby("SzkolaIdentyfikator")
         .size()
         .rename("Liczba pasujących klas")
         .reset_index()
     )
+    # Helper zostaje lokalny, żeby fragment Streamlit nie był wrażliwy na hot reload
+    # modułu score; logika wyboru najlepszego wiersza pozostaje taka sama.
     best_schools = (
         fit_results.sort_values("FitScore", ascending=False, na_position="last")
-        .groupby("SzkolaIdentyfikator", as_index=False)
-        .first()
+        .groupby("SzkolaIdentyfikator", sort=False, group_keys=False)
+        .head(1)
+        .copy()
     )
     best_schools = best_schools.merge(counts, on="SzkolaIdentyfikator", how="left")
     best_schools = best_schools.sort_values(
@@ -501,6 +512,7 @@ def _render_fit_results(
     wanted_subjects_filter: list,
     selected_year,
     export_filter_entries: list,
+    ranking_max_reference: float | None = None,
 ) -> None:
     """Renderuje sekcję obliczeń FitScore wewnątrz fragmentu Streamlit.
 
@@ -689,6 +701,7 @@ Jeśli brakuje danych dla ważonej składowej (np. rankingu albo progu), ta skł
         points=predicted_points,
         weights=weights,
         profile_subjects=wanted_subjects_filter,
+        ranking_max_reference=ranking_max_reference,
     )
 
     st.metric(
@@ -714,6 +727,7 @@ Jeśli brakuje danych dla ważonej składowej (np. rankingu albo progu), ta skł
         "Ranking pkt",
         "Próg pkt",
         "Bliskość pkt",
+        "Profil pkt",
     ]
     for col in score_cols:
         if col in display_df.columns:
@@ -763,6 +777,7 @@ Jeśli brakuje danych dla ważonej składowej (np. rankingu albo progu), ta skł
                 "RankingScore": "Ranking pkt",
                 "AdmissionScore": "Próg pkt",
                 "DistanceScore": "Bliskość pkt",
+                "ProfileScore": "Profil pkt",
                 "RankingPoz": "Ranking",
                 "MinProg": "Próg",
                 "AdmitMargin": "Margines pkt",
@@ -900,6 +915,11 @@ def main():
         )
         return
     ranking_year = get_filter_ranking_year(df_schools_raw, selected_year)
+    ranking_max_reference = None
+    if "RankingPoz" in df_classes_raw.columns:
+        ranking_values = pd.to_numeric(df_classes_raw["RankingPoz"], errors="coerce")
+        if not ranking_values.dropna().empty:
+            ranking_max_reference = float(ranking_values.max())
 
     # Onboarding - przewodnik dla nowych użytkowników. Domyślnie rozwinięty,
     # użytkownik świadomie zamyka go przyciskiem (zapis w session_state + cookie,
@@ -981,6 +1001,7 @@ dopasowania).
                 "avoided_subjects",
                 "show_heatmap",
                 "points_range",
+                "viz_selected_charts",
             ]
             # Plus stan zakładki „Moje dopasowanie", który zależy od filtrów.
             fit_widget_keys = [
@@ -1550,6 +1571,7 @@ dopasowania).
                     wanted_subjects_filter=wanted_subjects_filter,
                     selected_year=selected_year,
                     export_filter_entries=export_filter_entries,
+                    ranking_max_reference=ranking_max_reference,
                 )
 
     with tab_viz:

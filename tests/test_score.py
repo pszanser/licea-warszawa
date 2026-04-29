@@ -238,6 +238,27 @@ def test_score_personalized_classes_scores_distance_on_absolute_scale():
     assert result["FitScore"].round(1).tolist() == [100.0, 50.0, 0.0, 0.0]
 
 
+def test_score_personalized_classes_uses_stable_ranking_reference():
+    classes = pd.DataFrame(
+        {
+            "RankingPoz": [10],
+            "Prog_min_klasa": [100],
+            "Prog_min_szkola": [100],
+            "OdlegloscKm": [1.0],
+        }
+    )
+
+    result = score_personalized_classes(
+        classes,
+        points=120,
+        weights={"ranking": 10},
+        ranking_max_reference=50,
+    )
+
+    assert result.iloc[0]["RankingScore"] == pytest.approx(81.632653, rel=1e-5)
+    assert result.iloc[0]["FitScore"] == pytest.approx(81.632653, rel=1e-5)
+
+
 def test_score_personalized_classes_counts_missing_weighted_components_as_zero():
     classes = pd.DataFrame(
         {
@@ -329,6 +350,30 @@ def test_summarize_best_schools_uses_best_class_and_adds_context_columns():
         "PrzedmiotyRozszerzone",
         "Dlaczego",
     ]
+
+
+def test_summarize_best_schools_keeps_whole_best_class_row():
+    fit_results = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["S1", "S1"],
+            "FitScore": [90.0, 80.0],
+            "NazwaSzkoly": ["Szkoła A", "Szkoła A"],
+            "OddzialNazwa": ["1b", "1a"],
+            "BrakiDanych": [np.nan, "brak progu"],
+            "PrzedmiotyRozszerzone": [np.nan, "mat-fiz"],
+        }
+    )
+
+    result = summarize_best_schools(fit_results)
+
+    assert result.iloc[0]["OddzialNazwa"] == "1b"
+    assert pd.isna(result.iloc[0]["BrakiDanych"])
+    assert pd.isna(result.iloc[0]["PrzedmiotyRozszerzone"])
+
+
+def test_summarize_best_schools_requires_identifier_and_score():
+    with pytest.raises(ValueError, match="FitScore"):
+        summarize_best_schools(pd.DataFrame({"SzkolaIdentyfikator": ["S1"]}))
 
 
 @pytest.mark.parametrize(
