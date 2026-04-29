@@ -32,6 +32,7 @@ BEST_SCHOOL_SUMMARY_COLUMNS = [
     "MinProg",
     "AdmitMargin",
     "RyzykoProgu",
+    "BrakiDanych",
     "PrzedmiotyRozszerzone",
     "Dlaczego",
 ]
@@ -177,6 +178,12 @@ def build_fit_explanation(row: pd.Series) -> str:
     """Buduje krótkie wyjaśnienie wyniku dopasowania."""
     plusy = []
     ryzyka = []
+    missing_components = row.get("BrakiDanych")
+    missing_components_text = (
+        str(missing_components).strip()
+        if pd.notna(missing_components) and str(missing_components).strip()
+        else ""
+    )
 
     profile_score = row.get("ProfileComponent")
     if pd.notna(profile_score):
@@ -201,8 +208,11 @@ def build_fit_explanation(row: pd.Series) -> str:
             plusy.append(f"margines +{margin_value:.0f} pkt")
         else:
             ryzyka.append(f"próg o {abs(margin_value):.0f} pkt powyżej wyniku")
-    elif label == "brak danych":
+    elif label == "brak danych" and "brak progu" not in missing_components_text:
         ryzyka.append("brak progu")
+
+    if missing_components_text:
+        ryzyka.append(missing_components_text)
 
     ranking = row.get("RankingPoz")
     if pd.notna(ranking) and float(ranking) <= 30:
@@ -214,6 +224,22 @@ def build_fit_explanation(row: pd.Series) -> str:
     if ryzyka:
         text += "; ryzyko: " + ", ".join(ryzyka)
     return text
+
+
+def _missing_components_text(row: pd.Series, active_weights: dict[str, float]) -> str:
+    """Opisuje brakujące dane dla składowych, które użytkownik faktycznie waży."""
+    missing = []
+    if active_weights.get("ranking", 0) > 0 and pd.isna(row.get("RankingComponent")):
+        missing.append("brak rankingu")
+    if active_weights.get("admission", 0) > 0 and pd.isna(
+        row.get("AdmissionComponent")
+    ):
+        missing.append("brak progu")
+    if active_weights.get("distance", 0) > 0 and pd.isna(row.get("DistanceComponent")):
+        missing.append("brak odległości")
+    if active_weights.get("profile", 0) > 0 and pd.isna(row.get("ProfileComponent")):
+        missing.append("brak profilu")
+    return "; ".join(missing)
 
 
 def score_personalized_classes(
@@ -251,20 +277,24 @@ def score_personalized_classes(
     df["ProfileScore"] = df["ProfileComponent"] * 100
 
     weighted_sum = pd.Series(0.0, index=df.index)
-    active_weight_sum = pd.Series(0.0, index=df.index)
+    active_weight_sum = 0.0
+    active_weights: dict[str, float] = {}
     for key, component_col in FIT_COMPONENTS.items():
         weight = float(weights.get(key, 0) or 0)
         if weight <= 0:
             continue
+        active_weights[key] = weight
         component = pd.to_numeric(df[component_col], errors="coerce")
-        available = component.notna()
         weighted_sum = weighted_sum.add(component.fillna(0) * weight)
-        active_weight_sum = active_weight_sum.add(available.astype(float) * weight)
+        active_weight_sum += weight
 
-    df["FitScore"] = np.where(
-        active_weight_sum > 0, weighted_sum / active_weight_sum * 100, np.nan
+    df["FitScore"] = (
+        weighted_sum / active_weight_sum * 100 if active_weight_sum > 0 else np.nan
     )
     df["RyzykoProgu"] = df["AdmitMargin"].apply(risk_label)
+    df["BrakiDanych"] = df.apply(
+        _missing_components_text, axis=1, active_weights=active_weights
+    )
     df["Dlaczego"] = df.apply(build_fit_explanation, axis=1)
     return df.sort_values("FitScore", ascending=False, na_position="last")
 

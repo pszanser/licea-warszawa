@@ -108,6 +108,7 @@ FIT_DISPLAY_COLUMNS = {
     "RankingScore": "Ranking pkt",
     "AdmissionScore": "Próg pkt",
     "DistanceScore": "Bliskość pkt",
+    "BrakiDanych": "Braki danych",
     "Dlaczego": "Dlaczego",
     "NazwaSzkoly": "Szkoła",
     "OddzialNazwa": "Klasa",
@@ -121,6 +122,8 @@ FIT_DISPLAY_COLUMNS = {
 }
 FIT_START_POINT_KEY = "fit_start_point"
 FIT_START_POINT_HINT_KEY = "fit_start_point_hint_shown"
+FIT_LAST_MAP_CLICK_KEY = "fit_last_map_click"
+FIT_START_POINT_FEEDBACK_KEY = "fit_start_point_feedback"
 FIT_SCHOOL_SUMMARY_COLUMNS = [
     "FitScore",
     "NazwaSzkoly",
@@ -135,6 +138,7 @@ FIT_SCHOOL_SUMMARY_COLUMNS = [
     "MinProg",
     "AdmitMargin",
     "RyzykoProgu",
+    "BrakiDanych",
     "PrzedmiotyRozszerzone",
     "Dlaczego",
     "SzkolaLat",
@@ -156,6 +160,66 @@ def _remember_start_point(
         "source": source,
         "label": label,
     }
+
+
+def _point_event_key(point: tuple[float, float] | None) -> tuple[float, float] | None:
+    """Stabilny klucz zdarzenia kliknięcia, żeby nie obsługiwać starego kliku ponownie."""
+    if point is None:
+        return None
+    try:
+        return (round(float(point[0]), 6), round(float(point[1]), 6))
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _get_last_map_click_key() -> tuple[float, float] | None:
+    value = st.session_state.get(FIT_LAST_MAP_CLICK_KEY)
+    if not isinstance(value, (tuple, list)) or len(value) != 2:
+        return None
+    try:
+        return (float(value[0]), float(value[1]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _mark_map_click_as_handled(point: tuple[float, float] | None) -> None:
+    point_key = _point_event_key(point)
+    if point_key is not None:
+        st.session_state[FIT_LAST_MAP_CLICK_KEY] = point_key
+
+
+def _clear_start_point() -> None:
+    """Czyści punkt bez odtwarzania ostatniego zapamiętanego kliku z mapy."""
+    current_click = select_start_point(
+        st.session_state.get("schools_map") or {}, allow_center=False
+    )
+    _mark_map_click_as_handled(current_click)
+    st.session_state.pop(FIT_START_POINT_KEY, None)
+
+
+def _push_start_point_feedback(kind: str, text: str) -> None:
+    messages = st.session_state.get(FIT_START_POINT_FEEDBACK_KEY, [])
+    if not isinstance(messages, list):
+        messages = []
+    messages.append({"kind": kind, "text": text})
+    st.session_state[FIT_START_POINT_FEEDBACK_KEY] = messages
+
+
+def _render_start_point_feedback() -> None:
+    messages = st.session_state.pop(FIT_START_POINT_FEEDBACK_KEY, [])
+    if not isinstance(messages, list):
+        return
+    for message in messages:
+        kind = message.get("kind")
+        text = message.get("text")
+        if not text:
+            continue
+        if kind == "success":
+            st.success(text)
+        elif kind == "warning":
+            st.warning(text)
+        else:
+            st.info(text)
 
 
 def _get_remembered_start_point() -> dict | None:
@@ -401,6 +465,12 @@ def _build_fit_dataframe_column_config() -> dict:
             help="Otwiera trasę komunikacją miejską od Twojego punktu startowego w Google Maps.",
             display_text="Sprawdź",
         ),
+        "Braki danych": st.column_config.TextColumn(
+            "Braki danych",
+            help=(
+                "Które ważone składowe nie miały danych i dlatego liczyły się jako 0."
+            ),
+        ),
     }
 
 
@@ -534,6 +604,7 @@ Ocena to mieszanka **trzech rzeczy** (proporcja zależy od suwaków po prawej):
 - 🔴 **bardzo ryzykownie** — brakuje więcej niż 10 pkt
 
 Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w ogóle nie wchodzą do oceny.
+Jeśli brakuje danych dla ważonej składowej (np. rankingu albo progu), ta składowa liczy się jako 0 i pokazujemy to w kolumnie **Braki danych**.
 
 *Uwaga:* progi z poprzedniego roku to tylko wskazówka — w nowym naborze mogą być inne.
             """)
@@ -678,6 +749,7 @@ Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w
                 "MinProg": "Próg",
                 "AdmitMargin": "Margines pkt",
                 "RyzykoProgu": "Ryzyko progu",
+                "BrakiDanych": "Braki danych",
                 "PrzedmiotyRozszerzone": "Rozszerzenia",
                 "Dlaczego": "Dlaczego",
             }
@@ -693,7 +765,10 @@ Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w
                     school_summary[col], errors="coerce"
                 ).round(1)
 
-        if "SzkolaLat" in school_summary.columns and "SzkolaLon" in school_summary.columns:
+        if (
+            "SzkolaLat" in school_summary.columns
+            and "SzkolaLon" in school_summary.columns
+        ):
             school_summary["Dojazd"] = (
                 "https://www.google.com/maps/dir/?api=1"
                 f"&origin={start_lat},{start_lon}"
@@ -704,7 +779,9 @@ Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w
                 + "&travelmode=transit"
             )
         school_summary = school_summary.drop(
-            columns=[c for c in ["SzkolaLat", "SzkolaLon"] if c in school_summary.columns]
+            columns=[
+                c for c in ["SzkolaLat", "SzkolaLon"] if c in school_summary.columns
+            ]
         )
 
         with st.expander("Najlepsze szkoły", expanded=False):
@@ -895,6 +972,9 @@ dopasowania).
                 "fit_weight_distance",
                 FIT_START_POINT_KEY,
                 FIT_START_POINT_HINT_KEY,
+                FIT_LAST_MAP_CLICK_KEY,
+                FIT_START_POINT_FEEDBACK_KEY,
+                "schools_map",
             ]
             for k in filter_widget_keys + fit_widget_keys:
                 st.session_state.pop(k, None)
@@ -1129,21 +1209,10 @@ dopasowania).
     # ZANIM zbudujemy nowy obiekt mapy (jeden render zamiast dwóch).
     prev_map_state = st.session_state.get("schools_map") or {}
     pre_clicked_point = select_start_point(prev_map_state, allow_center=False)
-    if pre_clicked_point is not None:
-        previous = _get_remembered_start_point()
-        previous_coords = (
-            (previous["lat"], previous["lon"]) if previous is not None else None
-        )
-        new_coords = (
-            round(pre_clicked_point[0], 6),
-            round(pre_clicked_point[1], 6),
-        )
-        previous_rounded = (
-            (round(previous_coords[0], 6), round(previous_coords[1], 6))
-            if previous_coords is not None
-            else None
-        )
-        if new_coords != previous_rounded:
+    pre_clicked_key = _point_event_key(pre_clicked_point)
+    active_start_source = st.session_state.get("fit_start_source") or "Klik na mapie"
+    if pre_clicked_point is not None and pre_clicked_key != _get_last_map_click_key():
+        if active_start_source == "Klik na mapie":
             _remember_start_point(pre_clicked_point, source="klik na mapie")
             if not st.session_state.get(FIT_START_POINT_HINT_KEY):
                 st.toast(
@@ -1151,6 +1220,7 @@ dopasowania).
                     icon="📍",
                 )
                 st.session_state[FIT_START_POINT_HINT_KEY] = True
+        _mark_map_click_as_handled(pre_clicked_point)
 
     # Punkt startowy z poprzedniego renderu (potrzebny do narysowania pinezki na mapie).
     remembered_start = _get_remembered_start_point()
@@ -1329,6 +1399,7 @@ dopasowania).
             # segmented_control zwraca None gdy nic nie wybrane – traktujemy jak domyślny wybór.
             if start_source is None:
                 start_source = "Klik na mapie"
+            _render_start_point_feedback()
 
             if start_source == "Środek widoku mapy":
                 col_use, col_clear = st.columns([3, 2], vertical_alignment="bottom")
@@ -1348,13 +1419,19 @@ dopasowania).
                                 current_center_point,
                                 source="środek widoku mapy",
                             )
+                            _push_start_point_feedback(
+                                "success",
+                                "Ustawiono punkt startowy ze środka widoku mapy.",
+                            )
+                            st.rerun()
                 with col_clear:
                     if st.button(
                         "Wyczyść punkt",
                         key="fit_clear_center",
                         width="stretch",
                     ):
-                        st.session_state.pop(FIT_START_POINT_KEY, None)
+                        _clear_start_point()
+                        st.rerun()
             elif start_source == "Adres":
                 if not geocoding_available:
                     st.warning(
@@ -1387,7 +1464,8 @@ dopasowania).
                             width="stretch",
                         )
                 if clear_clicked:
-                    st.session_state.pop(FIT_START_POINT_KEY, None)
+                    _clear_start_point()
+                    st.rerun()
                 if geocode_clicked and address_input.strip():
                     normalized = _normalize_address(address_input)
                     with st.spinner("Szukam adresu…"):
@@ -1407,19 +1485,22 @@ dopasowania).
                             )
                         )
                         if distance_to_center > WARSAW_VALIDATION_RADIUS_KM:
-                            st.warning(
+                            _push_start_point_feedback(
+                                "warning",
                                 "Adres wygląda na spoza obszaru Warszawy "
                                 f"(~{distance_to_center:.0f} km od centrum). "
-                                "Sprawdź pisownię lub potwierdź wynik."
+                                "Sprawdź pisownię lub potwierdź wynik.",
                             )
                         _remember_start_point(
                             coords,
                             source="adres",
                             label=address_input.strip(),
                         )
-                        st.success(
-                            f"Znaleziono: {_format_start_point(coords[0], coords[1])}"
+                        _push_start_point_feedback(
+                            "success",
+                            f"Znaleziono: {_format_start_point(coords[0], coords[1])}",
                         )
+                        st.rerun()
             else:  # Klik na mapie
                 col_clear, _ = st.columns([2, 5])
                 with col_clear:
@@ -1428,7 +1509,8 @@ dopasowania).
                         key="fit_clear_clicked",
                         width="stretch",
                     ):
-                        st.session_state.pop(FIT_START_POINT_KEY, None)
+                        _clear_start_point()
+                        st.rerun()
 
             remembered = _get_remembered_start_point()
             if remembered is None:

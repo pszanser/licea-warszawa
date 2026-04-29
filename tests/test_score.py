@@ -210,6 +210,7 @@ def test_score_personalized_classes_returns_fit_score_between_zero_and_hundred()
     assert result["FitScore"].between(0, 100).all()
     assert result.iloc[0]["OddzialNazwa"] == "mat-fiz"
     assert "RyzykoProgu" in result.columns
+    assert "BrakiDanych" in result.columns
     assert "Dlaczego" in result.columns
     assert {"RankingScore", "AdmissionScore", "DistanceScore", "ProfileScore"}.issubset(
         result.columns
@@ -237,27 +238,48 @@ def test_score_personalized_classes_scores_distance_on_absolute_scale():
     assert result["FitScore"].round(1).tolist() == [100.0, 50.0, 0.0, 0.0]
 
 
-def test_score_personalized_classes_skips_missing_components_per_row():
+def test_score_personalized_classes_counts_missing_weighted_components_as_zero():
     classes = pd.DataFrame(
         {
             "RankingPoz": [1, np.nan],
             "Prog_min_klasa": [120, 130],
             "Prog_min_szkola": [110, 120],
-            "OdlegloscKm": [1.0, np.nan],
+            "OdlegloscKm": [0.0, 0.0],
         }
     )
 
     result = score_personalized_classes(
         classes,
         points=140,
-        weights={"ranking": 10, "admission": 10, "distance": 10, "profile": 10},
-        profile_subjects=[],
+        weights={"ranking": 10},
+    )
+
+    assert result.loc[0, "FitScore"] == 100
+    assert result.loc[1, "FitScore"] == 0
+    assert result.loc[1, "BrakiDanych"] == "brak rankingu"
+    assert "brak rankingu" in result.loc[1, "Dlaczego"]
+
+
+def test_score_personalized_classes_marks_missing_threshold():
+    classes = pd.DataFrame(
+        {
+            "RankingPoz": [1, 1],
+            "Prog_min_klasa": [120, np.nan],
+            "Prog_min_szkola": [110, np.nan],
+            "OdlegloscKm": [0.0, 0.0],
+        }
+    )
+
+    result = score_personalized_classes(
+        classes,
+        points=140,
+        weights={"admission": 10},
     )
 
     assert pd.notna(result.loc[0, "FitScore"])
-    assert pd.notna(result.loc[1, "FitScore"])
-    assert pd.isna(result.loc[1, "DistanceComponent"])
-    assert pd.isna(result.loc[1, "ProfileComponent"])
+    assert result.loc[1, "FitScore"] == 0
+    assert result.loc[1, "BrakiDanych"] == "brak progu"
+    assert "brak progu" in result.loc[1, "Dlaczego"]
 
 
 def test_summarize_best_schools_uses_best_class_and_adds_context_columns():
@@ -277,6 +299,7 @@ def test_summarize_best_schools_uses_best_class_and_adds_context_columns():
             "MinProg": [130, 140, 150],
             "AdmitMargin": [30, 20, 10],
             "RyzykoProgu": ["bezpiecznie", "bezpiecznie", "realnie"],
+            "BrakiDanych": ["", "brak progu", ""],
             "PrzedmiotyRozszerzone": ["mat", "mat-fiz", "bio-chem"],
             "Dlaczego": ["niżej", "najlepsza klasa", "druga szkoła"],
         }
@@ -302,6 +325,7 @@ def test_summarize_best_schools_uses_best_class_and_adds_context_columns():
         "MinProg",
         "AdmitMargin",
         "RyzykoProgu",
+        "BrakiDanych",
         "PrzedmiotyRozszerzone",
         "Dlaczego",
     ]
