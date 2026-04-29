@@ -1,7 +1,6 @@
 # Historia zmian
 
-Krótka historia zmian w aplikacji. Najnowsze wpisy są na górze i są opisane
-językiem efektu dla ucznia lub rodzica, a nie listą technicznych commitów.
+Krótka historia zmian w aplikacji.
 
 ## 2026-04-29 - Dopasowanie szkół
 
