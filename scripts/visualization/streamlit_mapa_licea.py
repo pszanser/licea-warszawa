@@ -828,17 +828,32 @@ dopasowania).
         st.header("Filtry")
 
         if st.button("Resetuj filtry"):
-            # Używamy globalnego FILTER_DEFAULTS
-            # Iterujemy po kluczach z FILTER_LABELS, ponieważ zawiera wszystkie klucze filtrów
-            for key_to_clear in FILTER_LABELS.keys():
-                if key_to_clear in st.session_state:
-                    if key_to_clear in FILTER_DEFAULTS:
-                        st.session_state[key_to_clear] = FILTER_DEFAULTS[key_to_clear]
-                    # Specjalna obsługa dla kluczy, które nie są w FILTER_DEFAULTS,
-                    # ale są kontrolowane przez inne widgety (np. checkbox)
-                    # i powinny zostać usunięte, aby widgety użyły swoich domyślnych wartości.
-                    elif key_to_clear in ["ranking_top", "points_range"]:
-                        del st.session_state[key_to_clear]
+            # Bezwarunkowo czyścimy wszystkie klucze widgetów filtrów. Po `pop`
+            # i `st.rerun()` widgety odbudują się z domyślnych wartości
+            # przekazanych w konstruktorze (np. selectbox `index=0`,
+            # slider `value=(min, max)`, multiselect bez `default=` → []).
+            filter_widget_keys = [
+                "school_type",
+                "school_names",
+                "class_types",
+                "wanted_subjects",
+                "avoided_subjects",
+                "show_heatmap",
+                "ranking_top",
+                "points_range",
+            ]
+            # Plus stan zakładki „Moje dopasowanie", który zależy od filtrów.
+            fit_widget_keys = [
+                "fit_start_source",
+                "fit_address_input",
+                "fit_weight_ranking",
+                "fit_weight_admission",
+                "fit_weight_distance",
+                FIT_START_POINT_KEY,
+                FIT_START_POINT_HINT_KEY,
+            ]
+            for k in filter_widget_keys + fit_widget_keys:
+                st.session_state.pop(k, None)
             st.rerun()
 
         st.subheader("Typ szkoły")
