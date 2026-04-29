@@ -937,14 +937,23 @@ def main():
     # Onboarding - przewodnik dla nowych użytkowników. Domyślnie rozwinięty,
     # użytkownik świadomie zamyka go przyciskiem (zapis w session_state + cookie,
     # dzięki czemu preferencja pamięta się także między wizytami).
-    if ONBOARDING_DISMISSED_STATE_KEY not in st.session_state:
-        st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = _read_onboarding_cookie()
+    onboarding_cookie_dismissed = _read_onboarding_cookie()
+    if onboarding_cookie_dismissed:
+        st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = True
+    elif ONBOARDING_DISMISSED_STATE_KEY not in st.session_state:
+        st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = False
     if st.session_state.pop(ONBOARDING_COOKIE_PENDING_STATE_KEY, False):
         _persist_onboarding_dismissal()
 
+    onboarding_dismissed = st.session_state[ONBOARDING_DISMISSED_STATE_KEY]
+    onboarding_expander_label = (
+        "👋 Przewodnik po aplikacji"
+        if onboarding_dismissed
+        else "👋 Pierwszy raz tutaj? Zobacz jak korzystać"
+    )
     with st.expander(
-        "👋 Pierwszy raz tutaj? Zobacz jak korzystać",
-        expanded=not st.session_state[ONBOARDING_DISMISSED_STATE_KEY],
+        onboarding_expander_label,
+        expanded=not onboarding_dismissed,
     ):
         st.markdown("""
 **Aplikacja pomaga wybrać szkołę średnią w 4 krokach:**
@@ -967,7 +976,7 @@ def main():
 początkowy. Wyniki możesz pobrać do Excela (przyciski pod mapą i pod tabelą
 dopasowania).
             """)
-        if not st.session_state[ONBOARDING_DISMISSED_STATE_KEY]:
+        if not onboarding_dismissed:
             st.button(
                 "✓ Rozumiem, ukryj ten przewodnik",
                 key="onboarding_dismiss_btn",
