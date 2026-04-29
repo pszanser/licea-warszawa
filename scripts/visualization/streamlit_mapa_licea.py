@@ -492,7 +492,7 @@ def _render_fit_results(
                 10,
                 7,
                 key="fit_weight_distance",
-                help="Im wyżej, tym ważniejsza mała odległość od Twojego punktu startowego.",
+                help="Im wyżej, tym ważniejsza mała odległość od Twojego punktu startowego. Odległość liczona w linii prostej (nie czas dojazdu).",
             )
         st.caption(
             "Wybrane rozszerzenia (z lewego paska) działają jako filtr "
@@ -782,7 +782,7 @@ def main():
    żeby zaznaczyć swój punkt startowy (np. dom). Pojawi się fioletowa pinezka 🏠.
 3. **🎯 Moje dopasowanie** — policzymy ranking klas dopasowanych do Ciebie
    na podstawie Twoich punktów, ważności kryteriów (renoma / szansa / bliskość)
-   i odległości. Punkt startowy możesz też wpisać jako adres.
+   i odległości **w linii prostej** od Twojego punktu startowego. Punkt startowy możesz też wpisać jako adres.
 4. **📊 Wizualizacje** — wykresy pomagające porównać szkoły (rozkład progów,
    liczba klas w dzielnicach, ranking vs próg).
 
