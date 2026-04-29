@@ -55,10 +55,10 @@ FILTER_DEFAULTS = {
     "wanted_subjects": [],
     "avoided_subjects": [],
     "show_heatmap": False,
-    # Uwaga: ranking_top i points_range nie są tutaj,
-    # ponieważ ich istnienie w session_state jest warunkowe
-    # i są obsługiwane przez 'del' podczas resetu,
-    # aby widgety mogły użyć swoich parametrów 'index'/'value'.
+    # Uwaga: ranking_top i points_range nie są tutaj — Streamlit nadaje im
+    # początkową wartość z konstruktora widgetu (selectbox `index=0`,
+    # slider `value=(min, max)`), a reset filtrów po prostu popuje wszystkie
+    # klucze widgetów z session_state.
 }
 
 # Wykresy tabu Wizualizacje – etykiety i domyślny zestaw widocznych pozycji.
