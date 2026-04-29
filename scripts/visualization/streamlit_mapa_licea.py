@@ -884,7 +884,6 @@ dopasowania).
                 "wanted_subjects",
                 "avoided_subjects",
                 "show_heatmap",
-                "ranking_top",
                 "points_range",
             ]
             # Plus stan zakładki „Moje dopasowanie", który zależy od filtrów.
@@ -899,6 +898,9 @@ dopasowania).
             ]
             for k in filter_widget_keys + fit_widget_keys:
                 st.session_state.pop(k, None)
+            # selectbox z None jako wartością domyślną wymaga jawnego ustawienia
+            # (samo pop nie zawsze resetuje do index=0 w Streamlit)
+            st.session_state["ranking_top"] = None
             st.rerun()
 
         st.subheader("Typ szkoły")
