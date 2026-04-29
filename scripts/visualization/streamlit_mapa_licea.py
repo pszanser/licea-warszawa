@@ -137,6 +137,8 @@ FIT_SCHOOL_SUMMARY_COLUMNS = [
     "RyzykoProgu",
     "PrzedmiotyRozszerzone",
     "Dlaczego",
+    "SzkolaLat",
+    "SzkolaLon",
 ]
 
 # Centrum Warszawy używane do walidacji zgeokodowanych adresów.
@@ -272,11 +274,21 @@ def create_schools_map_streamlit(
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
 
     Gdy podano start_point (lat, lon), rysuje na mapie dodatkową pinezkę reprezentującą
-    punkt startowy użytkownika z zakładki "Moje dopasowanie".
+    punkt startowy użytkownika z zakładki "Moje dopasowanie" oraz dodaje do popupów
+    szkół link „🚌 Sprawdź dojazd z Twojego punktu" kierujący do Google Maps transit.
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
     Fullscreen().add_to(m)
     LocateControl().add_to(m)
+
+    origin_lat: float | None = None
+    origin_lon: float | None = None
+    if start_point is not None:
+        try:
+            origin_lat = float(start_point[0])
+            origin_lon = float(start_point[1])
+        except (TypeError, ValueError, IndexError):
+            origin_lat = origin_lon = None
 
     if df_schools_to_display.empty:
         st.warning("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.")
@@ -288,6 +300,8 @@ def create_schools_map_streamlit(
             class_count_per_school=class_count_per_school,
             filtered_class_details_per_school=filtered_class_details_per_school,
             school_summary_from_filtered=school_summary_from_filtered,
+            origin_lat=origin_lat,
+            origin_lon=origin_lon,
         )
 
     if show_heatmap and not df_schools_to_display.empty:
@@ -295,16 +309,9 @@ def create_schools_map_streamlit(
         HeatMap(heat_data, name="HeatMap").add_to(m)
 
     if start_point is not None:
-        sp_lat: float | None
-        sp_lon: float | None
-        try:
-            sp_lat = float(start_point[0])
-            sp_lon = float(start_point[1])
-        except (TypeError, ValueError, IndexError):
-            sp_lat = sp_lon = None
-        if sp_lat is not None and sp_lon is not None:
+        if origin_lat is not None and origin_lon is not None:
             folium.Marker(
-                location=[sp_lat, sp_lon],
+                location=[origin_lat, origin_lon],
                 tooltip="Twój punkt startowy",
                 popup="Punkt startowy do dopasowania",
                 icon=folium.Icon(color="purple", icon="home", prefix="fa"),
@@ -388,6 +395,11 @@ def _build_fit_dataframe_column_config() -> dict:
             "Ranking",
             help="Pozycja szkoły w rankingu Perspektyw.",
             format="%.0f",
+        ),
+        "Dojazd": st.column_config.LinkColumn(
+            "🚌 Dojazd",
+            help="Otwiera trasę komunikacją miejską od Twojego punktu startowego w Google Maps.",
+            display_text="Sprawdź",
         ),
     }
 
@@ -512,6 +524,7 @@ Ocena to mieszanka **trzech rzeczy** (proporcja zależy od suwaków po prawej):
   - Twoje 145 pkt, klasa wymagała 160 → zapas −15 pkt → ocena ok. 10 (raczej za nisko).
 - **Bliskość** — odległość w linii prostej od Twojego punktu startowego.
   - 0 km → 100, 7 km → ok. 50, 15 km i dalej → 0.
+  - żeby sprawdzić **rzeczywisty czas dojazdu** komunikacją miejską, kliknij kolumnę **🚌 Dojazd** przy danej klasie — otworzy Google Maps z gotową trasą.
 
 **Ryzyko progu** w tabeli wynika ze wspomnianego zapasu punktów:
 
@@ -617,6 +630,21 @@ Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w
         if col in display_df.columns:
             display_df[col] = pd.to_numeric(display_df[col], errors="coerce").round(1)
 
+    # Kolumna z linkiem do Google Maps transit od punktu startowego użytkownika.
+    # Nie wymaga klucza API – użytkownik otwiera trasę bezpośrednio w Google Maps.
+    if "SzkolaLat" in top_results.columns and "SzkolaLon" in top_results.columns:
+        display_df["Dojazd"] = (
+            "https://www.google.com/maps/dir/?api=1"
+            f"&origin={start_lat},{start_lon}"
+            "&destination="
+            + top_results["SzkolaLat"].astype(str)
+            + ","
+            + top_results["SzkolaLon"].astype(str)
+            + "&travelmode=transit"
+        )
+    else:
+        display_df["Dojazd"] = None
+
     column_config = _build_fit_dataframe_column_config()
 
     st.markdown("**Najlepsze klasy dla mnie**")
@@ -664,6 +692,20 @@ Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w
                 school_summary[col] = pd.to_numeric(
                     school_summary[col], errors="coerce"
                 ).round(1)
+
+        if "SzkolaLat" in school_summary.columns and "SzkolaLon" in school_summary.columns:
+            school_summary["Dojazd"] = (
+                "https://www.google.com/maps/dir/?api=1"
+                f"&origin={start_lat},{start_lon}"
+                "&destination="
+                + school_summary["SzkolaLat"].astype(str)
+                + ","
+                + school_summary["SzkolaLon"].astype(str)
+                + "&travelmode=transit"
+            )
+        school_summary = school_summary.drop(
+            columns=[c for c in ["SzkolaLat", "SzkolaLon"] if c in school_summary.columns]
+        )
 
         with st.expander("Najlepsze szkoły", expanded=False):
             st.dataframe(
@@ -780,9 +822,12 @@ def main():
    punktowych. Liczby u góry (Szkoły, Klasy, Średni próg) reagują na bieżąco.
 2. **🗺️ Mapa** — zobacz lokalizacje szkół. **Kliknij dowolne miejsce na mapie**,
    żeby zaznaczyć swój punkt startowy (np. dom). Pojawi się fioletowa pinezka 🏠.
+   Po ustawieniu punktu, pinezka każdej szkoły pokazuje link
+   **🚌 Sprawdź dojazd z Twojego punktu** — otwiera Google Maps z trasą komunikacją miejską.
 3. **🎯 Moje dopasowanie** — policzymy ranking klas dopasowanych do Ciebie
    na podstawie Twoich punktów, ważności kryteriów (renoma / szansa / bliskość)
    i odległości **w linii prostej** od Twojego punktu startowego. Punkt startowy możesz też wpisać jako adres.
+   W tabeli wyników kliknij **🚌 Dojazd**, żeby sprawdzić rzeczywisty czas dojazdu w Google Maps.
 4. **📊 Wizualizacje** — wykresy pomagające porównać szkoły (rozkład progów,
    liczba klas w dzielnicach, ranking vs próg).
 

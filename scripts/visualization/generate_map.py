@@ -410,10 +410,16 @@ def add_school_markers_to_map(
     class_count_per_school: dict[str, int],
     filtered_class_details_per_school: dict[str, list[dict]],
     school_summary_from_filtered: dict[str, dict],
+    origin_lat: float | None = None,
+    origin_lon: float | None = None,
 ) -> None:
     """
     Dodaje markery szkół do obiektu mapy Folium.
     Markery są grupowane w klastry (MarkerCluster) dla lepszej czytelności.
+
+    Gdy podane origin_lat/origin_lon, do popupu każdej szkoły dodawany jest
+    link „🚌 Sprawdź dojazd z Twojego punktu" prowadzący do Google Maps z trasą
+    transit od punktu startowego użytkownika. Nie wymaga klucza API.
     """
     if df_schools_to_display.empty:
         # print("Brak szkół do wyświetlenia na mapie po zastosowaniu filtrów.") # Handled by caller
@@ -434,6 +440,17 @@ def add_school_markers_to_map(
         popup_html += (
             f"Adres: <a href='{nav_url}' target='_blank'>{row['AdresSzkoly']}</a><br>"
         )
+        if origin_lat is not None and origin_lon is not None:
+            commute_url = (
+                "https://www.google.com/maps/dir/?api=1"
+                f"&origin={origin_lat},{origin_lon}"
+                f"&destination={row['SzkolaLat']},{row['SzkolaLon']}"
+                "&travelmode=transit"
+            )
+            popup_html += (
+                f"<a href='{commute_url}' target='_blank'>"
+                "🚌 Sprawdź dojazd z Twojego punktu</a><br>"
+            )
         popup_html += f"Dzielnica: {row['Dzielnica']}<br>"
 
         summary = school_summary_from_filtered.get(szk_id, {})
