@@ -362,6 +362,40 @@ def main():
         return
     ranking_year = get_filter_ranking_year(df_schools_raw, selected_year)
 
+    # Onboarding - przewodnik dla nowych użytkowników. Domyślnie rozwinięty,
+    # użytkownik świadomie zamyka go przyciskiem (zapis w session_state).
+    if "onboarding_dismissed" not in st.session_state:
+        st.session_state["onboarding_dismissed"] = False
+    with st.expander(
+        "👋 Pierwszy raz tutaj? Zobacz jak korzystać",
+        expanded=not st.session_state["onboarding_dismissed"],
+    ):
+        st.markdown("""
+**Aplikacja pomaga wybrać szkołę średnią w 4 krokach:**
+
+1. **⬅️ Filtry (lewy pasek)** — zacznij od ograniczenia listy: typ szkoły,
+   ranking, poszukiwane lub unikane przedmioty rozszerzone, zakres progów
+   punktowych. Liczby u góry (Szkoły, Klasy, Średni próg) reagują na bieżąco.
+2. **🗺️ Mapa** — zobacz lokalizacje szkół. **Kliknij dowolne miejsce na mapie**,
+   żeby zaznaczyć swój punkt startowy (np. dom). Pojawi się fioletowa pinezka 🏠.
+3. **🎯 Moje dopasowanie** — policzymy ranking klas dopasowanych do Ciebie
+   na podstawie Twoich punktów, ważności kryteriów (renoma / szansa / bliskość)
+   i odległości. Punkt startowy możesz też wpisać jako adres.
+4. **📊 Wizualizacje** — wykresy pomagające porównać szkoły (rozkład progów,
+   liczba klas w dzielnicach, ranking vs próg).
+
+💡 **Wskazówka:** przycisk **Resetuj filtry** w lewym pasku przywraca stan
+początkowy. Wyniki możesz pobrać do Excela (przyciski pod mapą i pod tabelą
+dopasowania).
+            """)
+        if st.button(
+            "✓ Rozumiem, ukryj ten przewodnik",
+            key="onboarding_dismiss_btn",
+            disabled=st.session_state["onboarding_dismissed"],
+        ):
+            st.session_state["onboarding_dismissed"] = True
+            st.rerun()
+
     # prezentujemy nazwę tylko przy lokalnym uruchomieniu
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
     if "_SL" not in latest_excel_file.name:
@@ -801,8 +835,9 @@ def main():
     with tab_fit:
         st.subheader("Moje dopasowanie")
         st.caption(
-            "Liczymy ranking szkoły, margines do progu i odległość w linii prostej "
-            "od wybranego punktu. Czas dojazdu pojawi się w kolejnych wersjach."
+            "Porównujemy szkoły po trzech rzeczach: pozycji w rankingu Perspektyw, "
+            "szansie dostania się (Twoje punkty vs próg klasy) i odległości od "
+            "wybranego miejsca."
         )
 
         if df_filtered_classes.empty or df_schools_to_display.empty:
@@ -924,76 +959,79 @@ def main():
                 start_lon = remembered["lon"]
                 source_label = remembered["source"]
                 label_text = remembered.get("label")
-                chip = (
-                    f"📍 **{label_text}** — {_format_start_point(start_lat, start_lon)} "
-                    f"(źródło: {source_label})"
-                    if label_text
-                    else f"📍 {_format_start_point(start_lat, start_lon)} "
-                    f"(źródło: {source_label})"
-                )
+                coords_str = _format_start_point(start_lat, start_lon)
+                if label_text:
+                    chip = f"📍 {label_text} — {coords_str} (źródło: {source_label})"
+                else:
+                    chip = f"📍 {coords_str} (źródło: {source_label})"
                 st.caption(chip)
 
                 settings_col, weights_col = st.columns([1, 2])
                 with settings_col:
                     predicted_points = st.number_input(
-                        "Przewidywana liczba punktów",
+                        "Twoje przewidywane punkty",
                         min_value=0.0,
                         max_value=300.0,
                         value=170.0,
-                        step=1.0,
+                        step=5.0,
                         help=(
-                            "Średni próg liceów w Warszawie to ~170-180 pkt. "
-                            "Wpisz swój wynik z egzaminu/symulacji."
+                            "Maks. 300 pkt (200 z egzaminu ósmoklasisty + 100 ze świadectwa "
+                            "i osiągnięć). Średnie progi w warszawskich liceach to ~170–180 pkt. "
+                            "Wpisz swój wynik z egzaminu próbnego lub szacunek."
                         ),
                     )
                     max_distance_km = st.slider(
-                        "Maksymalna odległość (km)",
+                        "Maks. odległość od domu (km)",
                         min_value=3,
                         max_value=25,
                         value=8,
                         step=1,
                         help=(
-                            "Twardy filtr: szkoły dalej od punktu startowego "
-                            "nie wchodzą do dopasowania."
+                            "Szkoły położone dalej niż ten promień (w linii prostej) "
+                            "nie będą brane pod uwagę."
                         ),
                     )
                     shortlist_limit = st.slider(
-                        "Liczba najbliższych szkół",
+                        "Maks. szkół do oceny",
                         min_value=10,
                         max_value=100,
                         value=40,
                         step=5,
-                        help="Dodatkowy limit po zastosowaniu maksymalnej odległości.",
+                        help=(
+                            "Spośród szkół w zadanym promieniu weźmiemy aż tyle "
+                            "najbliższych. Więcej = wolniej, ale szerszy wybór."
+                        ),
                     )
                     top_classes_to_show = st.number_input(
-                        "Pokaż top N klas",
+                        "Ile klas pokazać w tabeli",
                         min_value=10,
                         max_value=200,
                         value=50,
                         step=10,
-                        help="Ile najlepszych klas pokazać w tabeli wyników.",
+                        help="Ograniczenie tabeli wyników — same najlepiej pasujące.",
                     )
 
                 with weights_col:
-                    st.markdown("**Ważność kryteriów**")
+                    st.markdown("**Co jest dla Ciebie najważniejsze?**")
+                    st.caption("Przesuń suwaki: 0 = nie ważne, 10 = bardzo ważne.")
                     w_col1, w_col2, w_col3 = st.columns(3)
                     with w_col1:
                         weight_ranking = st.slider(
-                            "Ranking",
+                            "Renoma szkoły",
                             0,
                             10,
                             6,
                             key="fit_weight_ranking",
-                            help="Im wyżej, tym mocniej liczy się pozycja szkoły w rankingu.",
+                            help="Im wyżej, tym ważniejsza pozycja w rankingu Perspektyw.",
                         )
                     with w_col2:
                         weight_admission = st.slider(
-                            "Próg",
+                            "Szansa dostania się",
                             0,
                             10,
                             8,
                             key="fit_weight_admission",
-                            help="Im wyżej, tym mocniej liczy się margines między punktami ucznia a progiem klasy.",
+                            help="Im wyżej, tym ważniejszy zapas między Twoimi punktami a progiem klasy.",
                         )
                     with w_col3:
                         weight_distance = st.slider(
@@ -1002,29 +1040,37 @@ def main():
                             10,
                             7,
                             key="fit_weight_distance",
-                            help="Im wyżej, tym mocniej liczy się odległość w linii prostej od punktu startowego.",
+                            help="Im wyżej, tym ważniejsza mała odległość od Twojego punktu startowego.",
                         )
                     st.caption(
-                        "Profil (poszukiwane rozszerzenia) działa jako twardy filtr "
-                        "z lewego paska — nie ma osobnej wagi."
+                        "Wybrane rozszerzenia (z lewego paska) działają jako filtr "
+                        "— nie mają osobnej wagi."
                     )
 
                 with st.expander("ℹ️ Jak liczymy dopasowanie?", expanded=False):
                     st.markdown("""
-**FitScore (0–100)** to średnia ważona trzech składników:
+**Co robimy?** Każdej klasie dajemy ocenę dopasowania od 0 do 100. Im więcej, tym lepiej pasuje do Ciebie.
 
-- **Ranking** – im wyżej w rankingu Perspektyw, tym lepszy wynik (pełne 100 dla #1).
-- **Próg** – sigmoida z marginesu = *Twoje punkty − próg klasy*. Margines +15 pkt to ~90, 0 pkt ≈ 50, −15 pkt ≈ 10.
-- **Bliskość** – liniowo: 0 km = 100, 15 km i dalej = 0 (odległość w linii prostej).
+Ocena to mieszanka **trzech rzeczy** (proporcja zależy od suwaków po prawej):
 
-**Ryzyko progu** w kolumnie *Ryzyko progu*:
+- **Renoma szkoły** — im wyżej w rankingu Perspektyw, tym więcej punktów. Numer 1 = 100, ostatnia szkoła = ok. 0.
+- **Szansa dostania się** — porównujemy Twoje punkty z progiem klasy z poprzedniego roku.
+  - Twoje 175 pkt, klasa wymagała 160 → zapas +15 pkt → ocena ok. 90 (bardzo bezpiecznie).
+  - Twoje 160 pkt, klasa wymagała 160 → zapas 0 pkt → ocena ok. 50 (na styk).
+  - Twoje 145 pkt, klasa wymagała 160 → zapas −15 pkt → ocena ok. 10 (raczej za nisko).
+- **Bliskość** — odległość w linii prostej od Twojego punktu startowego.
+  - 0 km → 100, 7 km → ok. 50, 15 km i dalej → 0.
 
-- *bezpiecznie* — margines ≥ 15 pkt
-- *realnie* — margines 0…14 pkt
-- *ryzykownie* — margines −10…−1 pkt
-- *bardzo ryzykownie* — margines < −10 pkt
+**Ryzyko progu** w tabeli wynika ze wspomnianego zapasu punktów:
 
-**Profil** (poszukiwane rozszerzenia) traktujemy jako twardy filtr z sidebara, nie jako wagę.
+- 🟢 **bezpiecznie** — zapas co najmniej 15 pkt
+- 🟡 **realnie** — zapas 0–14 pkt
+- 🟠 **ryzykownie** — brakuje 1–10 pkt
+- 🔴 **bardzo ryzykownie** — brakuje więcej niż 10 pkt
+
+Wybrane rozszerzenia (np. matematyka) traktujemy jako filtr — klasy bez nich w ogóle nie wchodzą do oceny.
+
+*Uwaga:* progi z poprzedniego roku to tylko wskazówka — w nowym naborze mogą być inne.
                         """)
 
                 weights = {
@@ -1099,11 +1145,11 @@ def main():
                         )
 
                         st.metric(
-                            "Szkoły w shortliście",
+                            "Szkoły w okolicy",
                             f"{len(shortlisted_schools)} / {len(df_schools_to_display)}",
                         )
                         st.caption(
-                            f"Uwzględniono szkoły do {max_distance_km} km od punktu "
+                            f"Uwzględniono szkoły do {max_distance_km} km od punktu "
                             f"startowego, maksymalnie {shortlist_limit} najbliższych."
                         )
 
@@ -1141,6 +1187,11 @@ def main():
                             f"Pokazano top {top_n} z {total_matches} dopasowanych klas."
                         )
                         st.dataframe(display_df, width="stretch", hide_index=True)
+                        st.caption(
+                            "Ryzyko progu: 🟢 bezpiecznie (zapas ≥15 pkt) · "
+                            "🟡 realnie (0–14 pkt) · 🟠 ryzykownie (brak 1–10 pkt) · "
+                            "🔴 bardzo ryzykownie (brak >10 pkt)."
+                        )
 
                         school_summary = pd.DataFrame()
                         if not fit_results.empty:
