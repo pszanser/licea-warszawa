@@ -192,7 +192,7 @@ python scripts/main.py --year 2026
 
 ### Interaktywna aplikacja Streamlit
 Zaawansowana aplikacja webowa z:
-*   **Przewodnikiem dla nowych użytkowników:** krótki onboarding w aplikacji, który można ukryć; decyzja jest pamiętana w cookies przeglądarki
+*   **Przewodnikiem dla nowych użytkowników:** krótki onboarding w aplikacji dostępny jako zwijany panel pomocy
 *   **Rozbudowanym panelem filtrów:** typ szkoły, ranking, nazwy, typy oddziałów, przedmioty rozszerzone, progi punktowe
 *   **Przyciskiem resetowania** wszystkich filtrów oraz stanu zakładki "Moje dopasowanie"
 *   **Trzema zakładkami: "Mapa", "Moje dopasowanie" i "Wizualizacje"** dla lepszej organizacji

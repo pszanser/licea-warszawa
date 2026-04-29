@@ -16,11 +16,6 @@ from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
 import io
 
-ONBOARDING_COOKIE_NAME = "licea_onboarding_dismissed"
-ONBOARDING_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 rok
-ONBOARDING_DISMISSED_STATE_KEY = "onboarding_dismissed"
-ONBOARDING_COOKIE_PENDING_STATE_KEY = "onboarding_cookie_write_pending"
-
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
 # stanu za pomocą wspólnej listy kluczy.
@@ -287,51 +282,6 @@ def _normalize_address(address: str) -> str:
     if "warszaw" in lower or "warsaw" in lower:
         return cleaned
     return f"{cleaned}, Warszawa"
-
-
-def _read_onboarding_cookie() -> bool:
-    """Sprawdza w cookies przeglądarki, czy użytkownik zamknął już onboarding.
-
-    `st.context.cookies` jest read-only i wymaga Streamlit ≥1.42 (mamy ≥1.56).
-    Brak cookies (np. starsza wersja środowiska) traktujemy jako „nie zamknął”.
-    """
-    try:
-        cookies = getattr(st.context, "cookies", None) or {}
-    except Exception:
-        return False
-    return cookies.get(ONBOARDING_COOKIE_NAME) == "1"
-
-
-def _persist_onboarding_dismissal() -> None:
-    """Zapisuje cookie w przeglądarce użytkownika, by onboarding pozostał ukryty
-    między wizytami.
-
-    Streamlit udostępnia `st.context.cookies` tylko do odczytu, więc zapis
-    robimy po stronie przeglądarki przez udokumentowane `st.html` z JavaScriptem.
-    W przeciwieństwie do starego `components.html`, `st.html` nie jest iframe'em,
-    więc zapis dotyczy właściwej domeny aplikacji na hostingu.
-    """
-    st.html(
-        f"""
-        <script>
-        (function () {{
-            let cookie =
-                "{ONBOARDING_COOKIE_NAME}=1; max-age={ONBOARDING_COOKIE_MAX_AGE}; path=/; SameSite=Lax";
-            if (window.location.protocol === "https:") {{
-                cookie += "; Secure";
-            }}
-            document.cookie = cookie;
-        }})();
-        </script>
-        """,
-        unsafe_allow_javascript=True,
-    )
-
-
-def _dismiss_onboarding() -> None:
-    """Ukrywa przewodnik w bieżącej sesji i zleca zapis cookie w kolejnym renderze."""
-    st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = True
-    st.session_state[ONBOARDING_COOKIE_PENDING_STATE_KEY] = True
 
 
 def _summarize_best_schools_for_display(fit_results: pd.DataFrame) -> pd.DataFrame:
@@ -971,27 +921,13 @@ def main():
         if not ranking_values.dropna().empty:
             ranking_max_reference = float(ranking_values.max())
 
-    # Onboarding - przewodnik dla nowych użytkowników. Domyślnie rozwinięty,
-    # użytkownik świadomie zamyka go przyciskiem (zapis w session_state + cookie,
-    # dzięki czemu preferencja pamięta się także między wizytami).
-    onboarding_cookie_dismissed = _read_onboarding_cookie()
-    if onboarding_cookie_dismissed:
-        st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = True
-    elif ONBOARDING_DISMISSED_STATE_KEY not in st.session_state:
-        st.session_state[ONBOARDING_DISMISSED_STATE_KEY] = False
-    if st.session_state.pop(ONBOARDING_COOKIE_PENDING_STATE_KEY, False):
-        _persist_onboarding_dismissal()
-
-    onboarding_dismissed = st.session_state[ONBOARDING_DISMISSED_STATE_KEY]
-    onboarding_expander_label = (
-        "👋 Przewodnik po aplikacji"
-        if onboarding_dismissed
-        else "👋 Pierwszy raz tutaj? Zobacz jak korzystać"
+    # Przewodnik jest zawsze dostępny, ale domyślnie zwinięty.
+    onboarding_container = st.expander(
+        "👋 Pierwszy raz tutaj? Zobacz przewodnik po aplikacji",
+        expanded=False,
     )
-    with st.expander(
-        onboarding_expander_label,
-        expanded=not onboarding_dismissed,
-    ):
+
+    with onboarding_container:
         st.markdown("""
 **Aplikacja pomaga wybrać szkołę średnią w 4 krokach:**
 
@@ -1013,14 +949,7 @@ def main():
 początkowy. Wyniki możesz pobrać do Excela (przyciski pod mapą i pod tabelą
 dopasowania).
             """)
-        if not onboarding_dismissed:
-            st.button(
-                "✓ Rozumiem, ukryj ten przewodnik",
-                key="onboarding_dismiss_btn",
-                on_click=_dismiss_onboarding,
-            )
-        else:
-            st.caption("Przewodnik jest ukryty przy kolejnych wejściach, ale możesz go rozwinąć tutaj w każdej chwili.")
+        st.caption("Możesz wrócić do tego przewodnika w każdej chwili.")
 
     # prezentujemy nazwę tylko przy lokalnym uruchomieniu
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
