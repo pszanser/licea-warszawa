@@ -2,10 +2,12 @@
 # Projekt: Wybór szkoły średniej w Warszawie i okolicach
 Ten projekt służy do pobrania informacji o liceach, technikach i szkołach branżowych z systemu Vulcan,
 połączenia z danymi o progach punktowych z poprzednich lat,
-rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps komunikają miejską
+rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps komunikacją miejską
 oraz generowania różnorodnych wizualizacji ułatwiających analizę.
 
-**Interaktywna mapa** i wizualizację są dostępne na https://licea-warszawa.streamlit.app/
+**Interaktywna mapa** i wizualizacje są dostępne na https://licea-warszawa.streamlit.app/
+
+**Historia zmian**: [zobacz, co nowego w aplikacji](HISTORIA_ZMIAN.md)
 
 Posty na LinkedIn o procesie tworzenia:  
 [1 - Python -> Excel](https://www.linkedin.com/posts/pszanser_sgh-liceum-edukacja-activity-7323984277598040065-8DO0)  
@@ -186,15 +188,19 @@ python scripts/main.py --year 2026
 ### Wizualizacje i analizy
 *   **Statyczne wykresy:** Histogramy, wykresy korelacji, analizy rozkładów
 *   **Interaktywna mapa:** Mapa z klastrowaniem znaczników, trybem pełnoekranowym, lokalizacją użytkownika i opcjonalną warstwą gęstości
-*   **Nawigacja:** Klikalne adresy otwierające trasę w Google Maps
+*   **Nawigacja:** Klikalne adresy szkół oraz linki dojazdu z wybranego punktu startowego otwierające trasę w Google Maps
 
 ### Interaktywna aplikacja Streamlit
 Zaawansowana aplikacja webowa z:
+*   **Przewodnikiem dla nowych użytkowników:** krótki onboarding w aplikacji, który można ukryć; decyzja jest pamiętana w cookies przeglądarki
 *   **Rozbudowanym panelem filtrów:** typ szkoły, ranking, nazwy, typy oddziałów, przedmioty rozszerzone, progi punktowe
-*   **Przyciskiem resetowania** wszystkich filtrów
-*   **Zakładkami "Mapa" i "Wizualizacje"** dla lepszej organizacji
+*   **Przyciskiem resetowania** wszystkich filtrów oraz stanu zakładki "Moje dopasowanie"
+*   **Trzema zakładkami: "Mapa", "Moje dopasowanie" i "Wizualizacje"** dla lepszej organizacji
+*   **Personalizowanym dopasowaniem (FitScore):** ważony scoring szkół po rankingu, marginesie do progu i odległości od punktu startowego (klik na mapie / środek widoku / adres z geokodowania Google). Jeśli dla ważonej składowej brakuje danych, np. rankingu albo progu, składowa liczy się jako `0` i jest pokazana w kolumnie **Braki danych**.
+*   **Punktem startowym do porównań:** klik na mapie zapamiętuje pinezkę, środek widoku pozwala szybko użyć aktualnego kadru mapy, a adres można zgeokodować przez Google Maps API
+*   **Linkami do rzeczywistego dojazdu:** popupy szkół i wyniki dopasowania mogą otworzyć gotową trasę komunikacją miejską z wybranego punktu startowego
 *   **Metrykami podsumowującymi:** liczba szkół/klas, średni próg
-*   **Eksportem do Excel** przefiltrowanych danych
+*   **Eksportem do Excel** przefiltrowanych danych oraz wyników dopasowania
 *   **Expandowaną listą szkół** z kluczowymi statystykami
 *   **Interaktywnymi wykresami:** histogram progów, analiza dzielnic, korelacje rankingu, współwystępowanie rozszerzeń, wykresy bąbelkowe
 
@@ -208,7 +214,7 @@ Zaawansowana aplikacja webowa z:
     # Tymczasowo (sesja):
     set GOOGLE_MAPS_API_KEY=twój_klucz_api
     ```
-    Bez ustawionej zmiennej czasy dojazdu nie zostaną obliczone
+    Bez ustawionej zmiennej czasy dojazdu nie zostaną obliczone, a w aplikacji Streamlit nie będzie dostępne geokodowanie punktu startowego z wpisanego adresu. Klik na mapie, środek widoku i linki do tras w Google Maps działają bez klucza API.
 *   **Odświeżenie danych:** Użyj flagi `pobierz_nowe_czasy` w pliku konfiguracyjnym
 
 ## Wykorzystywane biblioteki

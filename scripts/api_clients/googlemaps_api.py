@@ -1,5 +1,57 @@
+import os
 import time
 import datetime
+
+
+def build_gmaps_client(api_key: str | None = None):
+    """Tworzy klienta Google Maps API lub zwraca None gdy brak klucza/biblioteki.
+
+    Używane przez Streamlit do opcjonalnego geokodowania adresu punktu startowego.
+    Nie podnosi wyjątku gdy brak klucza – wywołujący decyduje co dalej.
+    """
+    key = api_key or os.environ.get("GOOGLE_MAPS_API_KEY")
+    if not key:
+        return None
+    try:
+        import googlemaps  # noqa: WPS433 (lazy import, opcjonalna zależność)
+    except ImportError:
+        return None
+    try:
+        return googlemaps.Client(key=key)
+    except Exception:
+        return None
+
+
+def geocode_address(
+    gmaps,
+    address: str,
+    region: str = "pl",
+    components: dict | None = None,
+) -> tuple[float, float] | None:
+    """Geokoduje pojedynczy adres i zwraca (lat, lon) lub None.
+
+    Parametry:
+    - gmaps: instancja klienta Google Maps (np. z build_gmaps_client). Gdy None → None.
+    - address: adres do zgeokodowania (np. ulica i numer).
+    - region: bias regionu, domyślnie 'pl' (Polska).
+    - components: dodatkowe ograniczenia, np. {"administrative_area": "mazowieckie"}.
+    """
+    if gmaps is None or not address or not address.strip():
+        return None
+    try:
+        kwargs: dict = {"address": address, "region": region}
+        if components:
+            kwargs["components"] = components
+        result = gmaps.geocode(**kwargs)
+    except Exception:
+        return None
+    if not result:
+        return None
+    try:
+        loc = result[0]["geometry"]["location"]
+        return float(loc["lat"]), float(loc["lng"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def get_travel_time(
