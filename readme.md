@@ -192,9 +192,10 @@ python scripts/main.py --year 2026
 Zaawansowana aplikacja webowa z:
 *   **Rozbudowanym panelem filtrów:** typ szkoły, ranking, nazwy, typy oddziałów, przedmioty rozszerzone, progi punktowe
 *   **Przyciskiem resetowania** wszystkich filtrów
-*   **Zakładkami "Mapa" i "Wizualizacje"** dla lepszej organizacji
+*   **Trzema zakładkami: "Mapa", "Moje dopasowanie" i "Wizualizacje"** dla lepszej organizacji
+*   **Personalizowanym dopasowaniem (FitScore):** ważone scoring szkół po rankingu, marginesie do progu i odległości od punktu startowego (klik na mapie / środek widoku / adres z geokodowania Google)
 *   **Metrykami podsumowującymi:** liczba szkół/klas, średni próg
-*   **Eksportem do Excel** przefiltrowanych danych
+*   **Eksportem do Excel** przefiltrowanych danych oraz wyników dopasowania
 *   **Expandowaną listą szkół** z kluczowymi statystykami
 *   **Interaktywnymi wykresami:** histogram progów, analiza dzielnic, korelacje rankingu, współwystępowanie rozszerzeń, wykresy bąbelkowe
 

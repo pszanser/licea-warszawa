@@ -7,7 +7,9 @@ st.set_page_config(
 )
 
 import sys
+import os
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import folium
 from folium.plugins import Fullscreen, LocateControl, HeatMap
@@ -20,59 +22,51 @@ import io
 
 FILTER_LABELS = {
     "school_type": "Wybierz typ szkoły:",
-    "ranking_filter": "Filtruj według pozycji w rankingu liceów",
+    "ranking_filter": "Pozycja w rankingu liceów (Perspektywy)",
     "ranking_top": "Pokaż licea z TOP:",
     "school_names": "Wybierz szkoły do wyświetlenia:",
     "class_types": "Wybierz typy oddziałów:",
     "wanted_subjects": "Wybierz poszukiwane przedmioty:",
     "avoided_subjects": "Wybierz unikane przedmioty:",
-    "points_filter": "Filtruj według progów punktowych",
     "points_range": "Zakres progów minimalnych:",
     "show_heatmap": "Pokaż mapę cieplną szkół",
+}
+
+FILTER_HELPS = {
+    "school_type": "Ogranicz listę do wybranego typu, np. liceum",
+    "ranking_filter": "Filtr używa najnowszego dostępnego rankingu",
+    "ranking_top": "Wybierz 'Wszystkie' aby nie ograniczać po rankingu",
+    "school_names": "Filtrowanie konkretnych szkół wg ich nazw",
+    "class_types": "np. ogólny [O] lub dwujęzyczny [D]/[DW]",
+    "wanted_subjects": "Klasa musi je oferować",
+    "avoided_subjects": "Klasa nie może ich mieć",
+    "points_range": "Wybierz dolny i górny próg",
+    "show_heatmap": "Zobacz zagęszczenie placówek",
+}
+
+FILTER_DEFAULTS = {
+    "school_type": [],
+    "school_names": [],
+    "class_types": [],
+    "wanted_subjects": [],
+    "avoided_subjects": [],
+    "show_heatmap": False,
+    # Uwaga: ranking_top i points_range nie są tutaj,
+    # ponieważ ich istnienie w session_state jest warunkowe
+    # i są obsługiwane przez 'del' podczas resetu,
+    # aby widgety mogły użyć swoich parametrów 'index'/'value'.
+}
+
+# Wykresy tabu Wizualizacje – etykiety i domyślny zestaw widocznych pozycji.
+CHART_OPTIONS = {
     "histogram": "Rozkład progów punktowych",
     "bar_district": "Liczba klas w dzielnicach",
     "scatter_rank": "Ranking vs próg punktowy",
     "cooccurrence": "Współwystępowanie rozszerzeń",
     "bubble_commute": "Czas dojazdu vs próg (bąbelkowy)",
 }
+CHART_DEFAULT_SELECTION = ["histogram", "bar_district", "scatter_rank"]
 
-FILTER_HELPS = {
-    "school_type": "Ogranicz listę do wybranego typu, np. liceum",
-    "ranking_filter": "Filtr używa najnowszego dostępnego rankingu",
-    "ranking_top": "Tylko licea z pierwszych pozycji najnowszego rankingu",
-    "school_names": "Filtrowanie konkretnych szkół wg ich nazw",
-    "class_types": "np. ogólny [O] lub dwujęzyczny [D]/[DW]",
-    "wanted_subjects": "Klasa musi je oferować",
-    "avoided_subjects": "Klasa nie może ich mieć",
-    "points_filter": "Włącz, by określić minimalne progi",
-    "points_range": "Wybierz dolny i górny próg",
-    "show_heatmap": "Zobacz zagęszczenie placówek",
-    "histogram": "Histogram progów w klasach",
-    "bar_district": "Porównanie dzielnic",
-    "scatter_rank": "Zależność progu od rankingu",
-    "cooccurrence": "Które rozszerzenia występują razem",
-    "bubble_commute": "Próg szkoły a czas dojazdu",
-}
-
-FILTER_DEFAULTS = {
-    "school_type": [],
-    "ranking_filter": False,
-    "school_names": [],
-    "class_types": [],
-    "wanted_subjects": [],
-    "avoided_subjects": [],
-    "points_filter": False,
-    "show_heatmap": False,
-    "histogram": True,
-    "bar_district": True,
-    "scatter_rank": True,
-    "cooccurrence": False,
-    "bubble_commute": False,
-    # Uwaga: ranking_top i points_range nie są tutaj,
-    # ponieważ ich istnienie w session_state jest warunkowe
-    # i są obsługiwane przez 'del' podczas resetu,
-    # aby widgety mogły użyć swoich parametrów 'index'/'value'.
-}
 
 # Dodaj katalog 'scripts' do sys.path, aby umożliwić importy z generate_map.py i innych modułów
 scripts_dir = Path(__file__).resolve().parent.parent
@@ -98,17 +92,18 @@ from visualization.generate_map import (
 from visualization import plots
 from analysis.score import (
     add_distance_from_point,
+    haversine_km,
     score_personalized_classes,
     select_start_point,
     shortlist_schools_by_distance,
 )
+from api_clients.googlemaps_api import build_gmaps_client, geocode_address
 
 FIT_DISPLAY_COLUMNS = {
     "FitScore": "Dopasowanie",
     "RankingScore": "Ranking pkt",
     "AdmissionScore": "Próg pkt",
     "DistanceScore": "Bliskość pkt",
-    "ProfileScore": "Profil pkt",
     "Dlaczego": "Dlaczego",
     "NazwaSzkoly": "Szkoła",
     "OddzialNazwa": "Klasa",
@@ -120,8 +115,8 @@ FIT_DISPLAY_COLUMNS = {
     "Dzielnica": "Dzielnica",
     "PrzedmiotyRozszerzone": "Rozszerzenia",
 }
-FIT_CLICKED_START_POINT_KEY = "fit_clicked_start_point"
-FIT_CENTER_START_POINT_KEY = "fit_center_start_point"
+FIT_START_POINT_KEY = "fit_start_point"
+FIT_START_POINT_HINT_KEY = "fit_start_point_hint_shown"
 FIT_SCHOOL_SUMMARY_COLUMNS = [
     "FitScore",
     "NazwaSzkoly",
@@ -132,7 +127,6 @@ FIT_SCHOOL_SUMMARY_COLUMNS = [
     "RankingScore",
     "AdmissionScore",
     "DistanceScore",
-    "ProfileScore",
     "RankingPoz",
     "MinProg",
     "AdmitMargin",
@@ -141,23 +135,67 @@ FIT_SCHOOL_SUMMARY_COLUMNS = [
     "Dlaczego",
 ]
 
+# Centrum Warszawy używane do walidacji zgeokodowanych adresów.
+WARSAW_VALIDATION_CENTER = (52.2297, 21.0122)
+WARSAW_VALIDATION_RADIUS_KM = 40.0
 
-def _remember_start_point(key: str, point: tuple[float, float]) -> None:
-    st.session_state[key] = (float(point[0]), float(point[1]))
+
+def _remember_start_point(
+    point: tuple[float, float], source: str, label: str | None = None
+) -> None:
+    """Zapisuje punkt startowy do session_state w jednej, ujednoliconej strukturze."""
+    st.session_state[FIT_START_POINT_KEY] = {
+        "lat": float(point[0]),
+        "lon": float(point[1]),
+        "source": source,
+        "label": label,
+    }
 
 
-def _get_remembered_start_point(key: str) -> tuple[float, float] | None:
-    value = st.session_state.get(key)
-    if not isinstance(value, (tuple, list)) or len(value) != 2:
+def _get_remembered_start_point() -> dict | None:
+    value = st.session_state.get(FIT_START_POINT_KEY)
+    if not isinstance(value, dict):
         return None
     try:
-        return float(value[0]), float(value[1])
+        lat = float(value.get("lat"))  # type: ignore[arg-type]
+        lon = float(value.get("lon"))  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
+    return {
+        "lat": lat,
+        "lon": lon,
+        "source": value.get("source") or "nieznane",
+        "label": value.get("label"),
+    }
 
 
-def _format_start_point(point: tuple[float, float]) -> str:
-    return f"{point[0]:.5f}, {point[1]:.5f}"
+def _format_start_point(lat: float, lon: float) -> str:
+    return f"{lat:.5f}, {lon:.5f}"
+
+
+@st.cache_data(ttl=24 * 3600, show_spinner=False)
+def _geocode_address_cached(address: str) -> tuple[float, float] | None:
+    """Geokoduje adres przez Google Maps z cache 24h. Zwraca None gdy brak klucza/wyniku."""
+    gmaps = build_gmaps_client()
+    if gmaps is None:
+        return None
+    return geocode_address(
+        gmaps,
+        address,
+        region="pl",
+        components={"administrative_area": "mazowieckie"},
+    )
+
+
+def _normalize_address(address: str) -> str:
+    """Dodaje ', Warszawa' jeśli adres nie wskazuje miasta – poprawia trafność geokodowania."""
+    cleaned = " ".join(address.strip().split())
+    if not cleaned:
+        return cleaned
+    lower = cleaned.lower()
+    if "warszaw" in lower or "warsaw" in lower:
+        return cleaned
+    return f"{cleaned}, Warszawa"
 
 
 def _summarize_best_schools_for_display(fit_results: pd.DataFrame) -> pd.DataFrame:
@@ -192,9 +230,13 @@ def create_schools_map_streamlit(
     filtered_class_details_per_school: dict,
     school_summary_from_filtered: dict,
     show_heatmap: bool = False,
+    start_point: tuple[float, float] | None = None,
 ):
     """
     Tworzy i zwraca mapę Folium z lokalizacjami szkół, korzystając z add_school_markers_to_map.
+
+    Gdy podano start_point (lat, lon), rysuje na mapie dodatkową pinezkę reprezentującą
+    punkt startowy użytkownika z zakładki "Moje dopasowanie".
     """
     m = folium.Map(location=WARSAW_CENTER_COORDS, zoom_start=11)
     Fullscreen().add_to(m)
@@ -215,6 +257,22 @@ def create_schools_map_streamlit(
     if show_heatmap and not df_schools_to_display.empty:
         heat_data = df_schools_to_display[["SzkolaLat", "SzkolaLon"]].values.tolist()
         HeatMap(heat_data, name="HeatMap").add_to(m)
+
+    if start_point is not None:
+        sp_lat: float | None
+        sp_lon: float | None
+        try:
+            sp_lat = float(start_point[0])
+            sp_lon = float(start_point[1])
+        except (TypeError, ValueError, IndexError):
+            sp_lat = sp_lon = None
+        if sp_lat is not None and sp_lon is not None:
+            folium.Marker(
+                location=[sp_lat, sp_lon],
+                tooltip="Twój punkt startowy",
+                popup="Punkt startowy do dopasowania",
+                icon=folium.Icon(color="purple", icon="home", prefix="fa"),
+            ).add_to(m)
     return m
 
 
@@ -252,11 +310,9 @@ def load_all_data(
 
 def main():
     st.title("🏫 Mapa szkół średnich - Warszawa i okolice")
-    st.markdown(
-        """
+    st.markdown("""
     Aplikacja umożliwia interaktywne przeglądanie szkół średnich w Warszawie i okolicach oraz filtrowanie ich według różnych kryteriów.
-    """
-    )
+    """)
 
     # Initialize session state for filters if not already set
     # Używamy globalnego FILTER_DEFAULTS
@@ -309,17 +365,20 @@ def main():
     # prezentujemy nazwę tylko przy lokalnym uruchomieniu
     # (w przypadku uruchomienia w chmurze Streamlit nazwa pliku zawiera "_SL")
     if "_SL" not in latest_excel_file.name:
-        st.write(f"Załadowano dane z pliku: **{latest_excel_file.name}**")
-    st.info(f"Rok danych: **{selected_year}** | status: **{status_label}**")
-    if not quality.empty:
-        q = quality.iloc[0]
-        st.caption(
-            "Kontrola danych: "
-            f"szkoły {int(q.get('schools_count', 0))}, "
-            f"klasy/wiersze {int(q.get('classes_count', 0))}, "
-            f"progi klasowe w {int(q.get('classes_with_threshold', 0))} wierszach, "
-            f"progi szkolne w {int(q.get('classes_with_school_threshold', 0))} wierszach."
-        )
+        with st.expander("ℹ️ Informacje o danych", expanded=False):
+            st.write(f"Plik źródłowy: `{latest_excel_file.name}`")
+            st.write(f"Rok danych: **{selected_year}** | status: **{status_label}**")
+            if not quality.empty:
+                q = quality.iloc[0]
+                st.caption(
+                    "Kontrola danych: "
+                    f"szkoły {int(q.get('schools_count', 0))}, "
+                    f"klasy/wiersze {int(q.get('classes_count', 0))}, "
+                    f"progi klasowe w {int(q.get('classes_with_threshold', 0))} wierszach, "
+                    f"progi szkolne w {int(q.get('classes_with_school_threshold', 0))} wierszach."
+                )
+    else:
+        st.caption(f"Rok danych: **{selected_year}** · status: **{status_label}**")
 
     available_subjects = get_subjects_from_dataframe(df_classes_raw)
     available_class_types = (
@@ -356,21 +415,19 @@ def main():
         )
 
         st.subheader(f"Ranking Perspektyw {int(ranking_year)}")
-        use_ranking_filter = st.checkbox(
+        ranking_options = [None, 10, 20, 30, 40, 50, 75, 100]
+
+        def _format_ranking_option(value):
+            return "Wszystkie" if value is None else f"TOP {value}"
+
+        max_ranking_poz_filter = st.selectbox(
             FILTER_LABELS["ranking_filter"],
-            key="ranking_filter",
-            help=FILTER_HELPS["ranking_filter"],
+            ranking_options,
+            index=0,
+            format_func=_format_ranking_option,
+            key="ranking_top",
+            help=FILTER_HELPS["ranking_top"],
         )
-        max_ranking_poz_filter = None
-        if use_ranking_filter:
-            max_ranking_positions = [10, 20, 30, 40, 50, 75, 100]
-            max_ranking_poz_filter = st.selectbox(
-                FILTER_LABELS["ranking_top"],
-                max_ranking_positions,
-                index=2,
-                key="ranking_top",
-                help=FILTER_HELPS["ranking_top"],
-            )
 
         st.subheader("Nazwa szkoły")
         # Lista nazw szkół zależy od wybranych typów
@@ -428,40 +485,42 @@ def main():
         if pd.notna(threshold_label) and str(threshold_label).strip():
             progi_label = f"{progi_label} ({threshold_label})"
         st.subheader(progi_label)
-        # checkbox, domyślnie False – filtr wyłączony
-        use_points_filter = st.checkbox(
-            FILTER_LABELS["points_filter"],
-            key="points_filter",
-            help=FILTER_HELPS["points_filter"],
-        )
-        if use_points_filter:
-            min_pts = (
-                df_classes_raw["Prog_min_szkola"].min()
-                if "Prog_min_szkola" in df_classes_raw.columns
-                and not df_classes_raw["Prog_min_szkola"].empty
-                else 100.0
-            )
-            max_pts_raw = (
-                df_classes_raw["Prog_min_szkola"].max()
-                if "Prog_min_szkola" in df_classes_raw.columns
-                and not df_classes_raw["Prog_min_szkola"].empty
-                else 200.0
-            )
-            default_max = min(max_pts_raw, 300.0)
 
-            points_range = st.slider(
-                FILTER_LABELS["points_range"],
-                min_value=min_pts,
-                max_value=300.0,
-                value=(min_pts, default_max),
-                step=1.0,
-                key="points_range",
-                help=FILTER_HELPS["points_range"],
-            )
-            min_class_points_filter, max_class_points_filter = points_range
+        progi_series = (
+            pd.to_numeric(df_classes_raw.get("Prog_min_szkola"), errors="coerce")
+            if "Prog_min_szkola" in df_classes_raw.columns
+            else pd.Series(dtype=float)
+        )
+        progi_valid = progi_series.dropna()
+        if not progi_valid.empty:
+            min_pts = float(np.floor(progi_valid.min()))
+            max_pts = float(np.ceil(progi_valid.max()))
         else:
-            # filtr nieaktywny – nie przekazujemy ograniczeń
-            min_class_points_filter, max_class_points_filter = None, None
+            min_pts, max_pts = 100.0, 200.0
+        if max_pts <= min_pts:
+            max_pts = min_pts + 1.0
+
+        points_range = st.slider(
+            FILTER_LABELS["points_range"],
+            min_value=min_pts,
+            max_value=max_pts,
+            value=(min_pts, max_pts),
+            step=1.0,
+            key="points_range",
+            help=(
+                f"{FILTER_HELPS['points_range']} "
+                f"(pełny zakres {int(min_pts)}–{int(max_pts)} pkt = brak filtra)."
+            ),
+        )
+        # Filtr aktywny tylko gdy zakres został zawężony (porównujemy z marginesem na float).
+        if points_range[0] > min_pts + 0.5:
+            min_class_points_filter = points_range[0]
+        else:
+            min_class_points_filter = None
+        if points_range[1] < max_pts - 0.5:
+            max_class_points_filter = points_range[1]
+        else:
+            max_class_points_filter = None
 
         st.markdown("---")
 
@@ -469,33 +528,6 @@ def main():
             FILTER_LABELS["show_heatmap"],
             key="show_heatmap",
             help=FILTER_HELPS["show_heatmap"],
-        )
-
-        st.subheader("Wykresy")
-        show_histogram = st.checkbox(
-            FILTER_LABELS["histogram"],
-            key="histogram",
-            help=FILTER_HELPS["histogram"],
-        )
-        show_bar_district = st.checkbox(
-            FILTER_LABELS["bar_district"],
-            key="bar_district",
-            help=FILTER_HELPS["bar_district"],
-        )
-        show_scatter_rank = st.checkbox(
-            FILTER_LABELS["scatter_rank"],
-            key="scatter_rank",
-            help=FILTER_HELPS["scatter_rank"],
-        )
-        show_cooccurrence = st.checkbox(
-            FILTER_LABELS["cooccurrence"],
-            key="cooccurrence",
-            help=FILTER_HELPS["cooccurrence"],
-        )
-        show_bubble_commute = st.checkbox(
-            FILTER_LABELS["bubble_commute"],
-            key="bubble_commute",
-            help=FILTER_HELPS["bubble_commute"],
         )
 
     # Filtrowanie po typie szkoły; brak wyboru oznacza wszystkie typy
@@ -588,21 +620,46 @@ def main():
         ("Status danych", status_label),
     ] + filter_entries
 
-    filters_info_html = ""
     if filter_entries:
-        active_filters_list = [
-            f"<b>{label}:</b> {value}" for label, value in filter_entries
-        ]
-        filters_info_html = "<br>".join(active_filters_list)
-        st.markdown(
-            f"""
-            <div style='background-color:#fff3e0; border:2px solid #d32f2f; border-radius:8px; padding:12px; margin-bottom:10px; font-size:16px;'>
-                <span style='color:#d32f2f; font-size:18px;'><b>Zastosowane filtry:</b></span><br>
-                {filters_info_html}
-            </div>
-            """,
-            unsafe_allow_html=True,
+        with st.expander(f"🔎 Aktywne filtry ({len(filter_entries)})", expanded=True):
+            for label, value in filter_entries:
+                st.markdown(f"- **{label}:** {value}")
+
+    # Najpierw odczytujemy klik z poprzedniego renderu zapisany przez st_folium
+    # w session_state["schools_map"]. Dzięki temu możemy zaktualizować punkt startowy
+    # ZANIM zbudujemy nowy obiekt mapy (jeden render zamiast dwóch).
+    prev_map_state = st.session_state.get("schools_map") or {}
+    pre_clicked_point = select_start_point(prev_map_state, allow_center=False)
+    if pre_clicked_point is not None:
+        previous = _get_remembered_start_point()
+        previous_coords = (
+            (previous["lat"], previous["lon"]) if previous is not None else None
         )
+        new_coords = (
+            round(pre_clicked_point[0], 6),
+            round(pre_clicked_point[1], 6),
+        )
+        previous_rounded = (
+            (round(previous_coords[0], 6), round(previous_coords[1], 6))
+            if previous_coords is not None
+            else None
+        )
+        if new_coords != previous_rounded:
+            _remember_start_point(pre_clicked_point, source="klik na mapie")
+            if not st.session_state.get(FIT_START_POINT_HINT_KEY):
+                st.toast(
+                    "Punkt startowy zapamiętany. Sprawdź zakładkę 🎯 Moje dopasowanie.",
+                    icon="📍",
+                )
+                st.session_state[FIT_START_POINT_HINT_KEY] = True
+
+    # Punkt startowy z poprzedniego renderu (potrzebny do narysowania pinezki na mapie).
+    remembered_start = _get_remembered_start_point()
+    start_point_for_map = (
+        (remembered_start["lat"], remembered_start["lon"])
+        if remembered_start is not None
+        else None
+    )
 
     map_object = create_schools_map_streamlit(
         df_schools_to_display=df_schools_to_display,
@@ -610,55 +667,54 @@ def main():
         filtered_class_details_per_school=detailed_filtered_classes_info,
         school_summary_from_filtered=school_summary_from_filtered,
         show_heatmap=show_heatmap,
+        start_point=start_point_for_map,
     )
 
-    if not df_schools_to_display.empty:
-        total_schools = len(df_schools_raw)
-        total_classes = len(df_classes_raw)
-        matching_schools = len(df_schools_to_display)
-        matching_classes = (
-            sum(count_filtered_classes.values()) if count_filtered_classes else 0
+    total_schools = len(df_schools_raw)
+    total_classes = len(df_classes_raw)
+    matching_schools = len(df_schools_to_display)
+    matching_classes = (
+        sum(count_filtered_classes.values()) if count_filtered_classes else 0
+    )
+
+    avg_points = None
+    if not df_filtered_classes.empty:
+        serie = df_filtered_classes.apply(
+            lambda r: (
+                r["Prog_min_klasa"]
+                if pd.notna(r["Prog_min_klasa"])
+                else r["Prog_min_szkola"]
+            ),
+            axis=1,
         )
+        avg_points_calc = serie.mean()
+        if pd.notna(avg_points_calc):
+            avg_points = float(avg_points_calc)
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("**Szkoły**", f"{matching_schools} / {total_schools}")
-        with col2:
-            st.metric("**Klasy**", f"{matching_classes} / {total_classes}")
-        with col3:
-            avg_points = None
-            if not df_filtered_classes.empty:
-                serie = df_filtered_classes.apply(
-                    lambda r: (
-                        r["Prog_min_klasa"]
-                        if pd.notna(r["Prog_min_klasa"])
-                        else r["Prog_min_szkola"]
-                    ),
-                    axis=1,
-                )
-                avg_points = serie.mean()
-
-            if avg_points is not None:
-                st.metric("**Średni próg (pasujące klasy)**", f"{avg_points:.1f}")
-            else:
-                st.metric("**Średni próg (pasujące klasy)**", "N/A")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Szkoły", f"{matching_schools} / {total_schools}")
+    with col2:
+        st.metric("Klasy", f"{matching_classes} / {total_classes}")
+    with col3:
+        if avg_points is not None:
+            st.metric("Średni próg (pasujące klasy)", f"{avg_points:.1f} pkt")
+        else:
+            st.metric("Średni próg (pasujące klasy)", "—")
 
     tab_map, tab_fit, tab_viz = st.tabs(
-        ["🗺️Mapa", "🎯Moje dopasowanie", "📊Wizualizacje"]
+        ["🗺️ Mapa", "🎯 Moje dopasowanie", "📊 Wizualizacje"]
     )
 
     with tab_map:
         st.subheader("Mapa szkół")
-        map_state = st_folium(
+        st_folium(
             map_object,
             width=None,
             height=600,
             returned_objects=["last_clicked", "center", "zoom"],
             key="schools_map",
         )
-        clicked_start_point = select_start_point(map_state, allow_center=False)
-        if clicked_start_point is not None:
-            _remember_start_point(FIT_CLICKED_START_POINT_KEY, clicked_start_point)
 
         if not df_filtered_classes.empty:
             buf = io.BytesIO()
@@ -671,7 +727,7 @@ def main():
                     filters_df.to_excel(writer, index=False, sheet_name="Parametry")
             buf.seek(0)
             st.download_button(
-                label="📥Pobierz dane klas (Excel)",
+                label="📥 Pobierz dane klas (Excel)",
                 data=buf,
                 file_name=f"moje_klasy_{selected_year}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -745,62 +801,137 @@ def main():
     with tab_fit:
         st.subheader("Moje dopasowanie")
         st.caption(
-            "Pierwsza wersja używa odległości w linii prostej od wybranego punktu. "
-            "Nie jest to jeszcze dokładny czas dojazdu."
+            "Liczymy ranking szkoły, margines do progu i odległość w linii prostej "
+            "od wybranego punktu. Czas dojazdu pojawi się w kolejnych wersjach."
         )
 
         if df_filtered_classes.empty or df_schools_to_display.empty:
             st.info("Najpierw dobierz filtry tak, aby zostały pasujące klasy.")
         else:
-            start_source = st.radio(
-                "Punkt startowy",
-                ["Kliknięty punkt na mapie", "Środek aktualnego widoku mapy"],
-                horizontal=True,
-            )
-            allow_center = start_source == "Środek aktualnego widoku mapy"
+            current_map_state = st.session_state.get("schools_map") or {}
             current_center_point = select_start_point(
-                {"center": (map_state or {}).get("center")},
+                {"center": current_map_state.get("center")},
                 allow_center=True,
             )
-            if allow_center:
-                center_col, clear_col = st.columns([2, 1])
-                with center_col:
+
+            geocoding_available = bool(os.environ.get("GOOGLE_MAPS_API_KEY"))
+            source_options = ["Klik na mapie", "Środek widoku mapy", "Adres"]
+            start_source = st.radio(
+                "Skąd brać punkt startowy?",
+                source_options,
+                horizontal=True,
+                key="fit_start_source",
+                help=(
+                    "Klik na mapie zapamiętuje pinezkę z zakładki Mapa. "
+                    "Adres wymaga klucza GOOGLE_MAPS_API_KEY."
+                ),
+            )
+
+            if start_source == "Środek widoku mapy":
+                col_use, col_clear = st.columns([2, 1])
+                with col_use:
                     if st.button(
                         "Użyj aktualnego środka mapy",
                         disabled=current_center_point is None,
+                        help=(
+                            None
+                            if current_center_point is not None
+                            else "Otwórz zakładkę Mapa i przesuń widok."
+                        ),
                     ):
                         if current_center_point is not None:
                             _remember_start_point(
-                                FIT_CENTER_START_POINT_KEY, current_center_point
+                                current_center_point,
+                                source="środek widoku mapy",
                             )
-                            st.rerun()
-                with clear_col:
-                    if st.button("Wyczyść punkt", key="clear_center_start_point"):
-                        st.session_state.pop(FIT_CENTER_START_POINT_KEY, None)
-                        st.rerun()
-                start_point = _get_remembered_start_point(FIT_CENTER_START_POINT_KEY)
-            else:
-                clear_col, _ = st.columns([1, 3])
-                with clear_col:
-                    if st.button("Wyczyść punkt", key="clear_clicked_start_point"):
-                        st.session_state.pop(FIT_CLICKED_START_POINT_KEY, None)
-                        st.rerun()
-                start_point = _get_remembered_start_point(FIT_CLICKED_START_POINT_KEY)
-
-            if start_point is None:
-                if allow_center:
-                    st.info(
-                        "Przejdź do mapy, ustaw widok lub użyj kontrolki lokalizacji, "
-                        "a potem wróć tutaj i kliknij „Użyj aktualnego środka mapy”."
+                with col_clear:
+                    if st.button("Wyczyść punkt", key="fit_clear_center"):
+                        st.session_state.pop(FIT_START_POINT_KEY, None)
+            elif start_source == "Adres":
+                if not geocoding_available:
+                    st.warning(
+                        "Geokodowanie adresu nie działa: brak zmiennej "
+                        "`GOOGLE_MAPS_API_KEY`. Użyj kliku na mapie lub środka widoku."
                     )
+                col_addr, col_btn, col_clear = st.columns([4, 1, 1])
+                with col_addr:
+                    address_input = st.text_input(
+                        "Adres",
+                        key="fit_address_input",
+                        placeholder="np. ul. Marszałkowska 1, Warszawa",
+                        disabled=not geocoding_available,
+                    )
+                with col_btn:
+                    geocode_clicked = st.button(
+                        "Znajdź",
+                        key="fit_geocode_btn",
+                        disabled=not geocoding_available or not address_input.strip(),
+                    )
+                with col_clear:
+                    if st.button("Wyczyść punkt", key="fit_clear_address"):
+                        st.session_state.pop(FIT_START_POINT_KEY, None)
+                if geocode_clicked and address_input.strip():
+                    normalized = _normalize_address(address_input)
+                    with st.spinner("Szukam adresu…"):
+                        coords = _geocode_address_cached(normalized)
+                    if coords is None:
+                        st.error(
+                            "Nie udało się znaleźć adresu. Sprawdź pisownię "
+                            "lub kliknij punkt na mapie."
+                        )
+                    else:
+                        distance_to_center = float(
+                            haversine_km(
+                                WARSAW_VALIDATION_CENTER[0],
+                                WARSAW_VALIDATION_CENTER[1],
+                                coords[0],
+                                coords[1],
+                            )
+                        )
+                        if distance_to_center > WARSAW_VALIDATION_RADIUS_KM:
+                            st.warning(
+                                "Adres wygląda na spoza obszaru Warszawy "
+                                f"(~{distance_to_center:.0f} km od centrum). "
+                                "Sprawdź pisownię lub potwierdź wynik."
+                            )
+                        _remember_start_point(
+                            coords,
+                            source="adres",
+                            label=address_input.strip(),
+                        )
+                        st.success(
+                            f"Znaleziono: {_format_start_point(coords[0], coords[1])}"
+                        )
+            else:  # Klik na mapie
+                col_clear, _ = st.columns([1, 3])
+                with col_clear:
+                    if st.button("Wyczyść punkt", key="fit_clear_clicked"):
+                        st.session_state.pop(FIT_START_POINT_KEY, None)
+
+            remembered = _get_remembered_start_point()
+            if remembered is None:
+                if start_source == "Środek widoku mapy":
+                    st.info(
+                        "Otwórz zakładkę 🗺️ Mapa, ustaw widok, wróć tutaj i kliknij "
+                        "„Użyj aktualnego środka mapy”."
+                    )
+                elif start_source == "Adres":
+                    st.info("Wpisz adres i kliknij „Znajdź”.")
                 else:
-                    st.info("Przejdź do mapy i kliknij punkt startowy.")
+                    st.info("Otwórz zakładkę 🗺️ Mapa i kliknij punkt startowy.")
             else:
-                start_lat, start_lon = start_point
-                st.caption(
-                    f"Zapamiętany punkt startowy: {_format_start_point(start_point)}. "
-                    "Odległość liczona jest lokalnie po współrzędnych szkół."
+                start_lat = remembered["lat"]
+                start_lon = remembered["lon"]
+                source_label = remembered["source"]
+                label_text = remembered.get("label")
+                chip = (
+                    f"📍 **{label_text}** — {_format_start_point(start_lat, start_lon)} "
+                    f"(źródło: {source_label})"
+                    if label_text
+                    else f"📍 {_format_start_point(start_lat, start_lon)} "
+                    f"(źródło: {source_label})"
                 )
+                st.caption(chip)
 
                 settings_col, weights_col = st.columns([1, 2])
                 with settings_col:
@@ -810,11 +941,17 @@ def main():
                         max_value=300.0,
                         value=170.0,
                         step=1.0,
+                        help=(
+                            "Średni próg liceów w Warszawie to ~170-180 pkt. "
+                            "Wpisz swój wynik z egzaminu/symulacji."
+                        ),
                     )
-                    max_distance_km = st.select_slider(
-                        "Maksymalna odległość km",
-                        options=[3, 5, 8, 12, 15, 20, 25],
+                    max_distance_km = st.slider(
+                        "Maksymalna odległość (km)",
+                        min_value=3,
+                        max_value=25,
                         value=8,
+                        step=1,
                         help=(
                             "Twardy filtr: szkoły dalej od punktu startowego "
                             "nie wchodzą do dopasowania."
@@ -826,14 +963,20 @@ def main():
                         max_value=100,
                         value=40,
                         step=5,
-                        help=(
-                            "Dodatkowy limit po zastosowaniu maksymalnej odległości."
-                        ),
+                        help="Dodatkowy limit po zastosowaniu maksymalnej odległości.",
+                    )
+                    top_classes_to_show = st.number_input(
+                        "Pokaż top N klas",
+                        min_value=10,
+                        max_value=200,
+                        value=50,
+                        step=10,
+                        help="Ile najlepszych klas pokazać w tabeli wyników.",
                     )
 
                 with weights_col:
                     st.markdown("**Ważność kryteriów**")
-                    w_col1, w_col2, w_col3, w_col4 = st.columns(4)
+                    w_col1, w_col2, w_col3 = st.columns(3)
                     with w_col1:
                         weight_ranking = st.slider(
                             "Ranking",
@@ -861,28 +1004,39 @@ def main():
                             key="fit_weight_distance",
                             help="Im wyżej, tym mocniej liczy się odległość w linii prostej od punktu startowego.",
                         )
-                    with w_col4:
-                        weight_profile = st.slider(
-                            "Profil",
-                            0,
-                            10,
-                            0,
-                            key="fit_weight_profile_disabled",
-                            disabled=True,
-                            help="Profil jest już uwzględniany przez filtr rozszerzeń po lewej.",
-                        )
+                    st.caption(
+                        "Profil (poszukiwane rozszerzenia) działa jako twardy filtr "
+                        "z lewego paska — nie ma osobnej wagi."
+                    )
+
+                with st.expander("ℹ️ Jak liczymy dopasowanie?", expanded=False):
+                    st.markdown("""
+**FitScore (0–100)** to średnia ważona trzech składników:
+
+- **Ranking** – im wyżej w rankingu Perspektyw, tym lepszy wynik (pełne 100 dla #1).
+- **Próg** – sigmoida z marginesu = *Twoje punkty − próg klasy*. Margines +15 pkt to ~90, 0 pkt ≈ 50, −15 pkt ≈ 10.
+- **Bliskość** – liniowo: 0 km = 100, 15 km i dalej = 0 (odległość w linii prostej).
+
+**Ryzyko progu** w kolumnie *Ryzyko progu*:
+
+- *bezpiecznie* — margines ≥ 15 pkt
+- *realnie* — margines 0…14 pkt
+- *ryzykownie* — margines −10…−1 pkt
+- *bardzo ryzykownie* — margines < −10 pkt
+
+**Profil** (poszukiwane rozszerzenia) traktujemy jako twardy filtr z sidebara, nie jako wagę.
+                        """)
 
                 weights = {
                     "ranking": weight_ranking,
                     "admission": weight_admission,
                     "distance": weight_distance,
-                    "profile": weight_profile,
+                    "profile": 0,
                 }
                 weight_labels = {
                     "ranking": "ranking",
                     "admission": "próg",
                     "distance": "bliskość",
-                    "profile": "profil",
                 }
                 active_weights = {
                     key: value
@@ -897,16 +1051,11 @@ def main():
                         f"{weight_labels[key]} {value / active_weight_sum:.0%}"
                         for key, value in active_weights.items()
                     ]
-                    st.caption("Aktywne wagi w tym widoku: " + ", ".join(weight_parts))
+                    st.caption("Aktywne wagi: " + ", ".join(weight_parts))
                     if wanted_subjects_filter:
                         st.caption(
-                            "Profil jest traktowany jako filtr: "
+                            "Profil traktowany jako filtr: "
                             + ", ".join(wanted_subjects_filter)
-                        )
-                    else:
-                        st.caption(
-                            "Profil jest wyłączony, bo nie wybrano poszukiwanych "
-                            "rozszerzeń w filtrach głównych."
                         )
                     schools_with_distance = add_distance_from_point(
                         df_schools_to_display, start_lat, start_lon
@@ -958,7 +1107,9 @@ def main():
                             f"startowego, maksymalnie {shortlist_limit} najbliższych."
                         )
 
-                        top_results = fit_results.head(50).copy()
+                        total_matches = len(fit_results)
+                        top_n = min(int(top_classes_to_show), total_matches)
+                        top_results = fit_results.head(top_n).copy()
                         display_cols = [
                             col
                             for col in FIT_DISPLAY_COLUMNS
@@ -978,7 +1129,6 @@ def main():
                             "Ranking pkt",
                             "Próg pkt",
                             "Bliskość pkt",
-                            "Profil pkt",
                         ]
                         for col in score_cols:
                             if col in display_df.columns:
@@ -987,6 +1137,9 @@ def main():
                                 ).round(1)
 
                         st.markdown("**Najlepsze klasy dla mnie**")
+                        st.caption(
+                            f"Pokazano top {top_n} z {total_matches} dopasowanych klas."
+                        )
                         st.dataframe(display_df, width="stretch", hide_index=True)
 
                         school_summary = pd.DataFrame()
@@ -1004,7 +1157,6 @@ def main():
                                     "RankingScore": "Ranking pkt",
                                     "AdmissionScore": "Próg pkt",
                                     "DistanceScore": "Bliskość pkt",
-                                    "ProfileScore": "Profil pkt",
                                     "RankingPoz": "Ranking",
                                     "MinProg": "Próg",
                                     "AdmitMargin": "Margines pkt",
@@ -1036,14 +1188,18 @@ def main():
                                 "Punkt startowy",
                                 f"{start_lat:.6f}, {start_lon:.6f}",
                             ),
-                            ("Źródło punktu", start_source),
+                            ("Źródło punktu", source_label),
+                            (
+                                "Etykieta punktu",
+                                label_text or "—",
+                            ),
                             ("Przewidywane punkty", predicted_points),
                             ("Maksymalna odległość km", max_distance_km),
                             ("Limit shortlisty szkół", shortlist_limit),
+                            ("Top N klas (UI)", top_n),
                             ("Waga ranking", weight_ranking),
                             ("Waga próg", weight_admission),
                             ("Waga bliskość", weight_distance),
-                            ("Waga profil", weight_profile),
                             (
                                 "Rozszerzenia dla profilu",
                                 ", ".join(wanted_subjects_filter) or "brak",
@@ -1066,14 +1222,27 @@ def main():
                             ).to_excel(writer, index=False, sheet_name="Parametry")
                         fit_buf.seek(0)
                         st.download_button(
-                            label="📥Pobierz moje dopasowanie (Excel)",
+                            label="📥 Pobierz moje dopasowanie (Excel)",
                             data=fit_buf,
                             file_name=f"moje_dopasowanie_{selected_year}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         )
 
     with tab_viz:
-        if show_histogram:
+        st.subheader("Wizualizacje")
+        selected_charts = st.multiselect(
+            "Wykresy do pokazania",
+            options=list(CHART_OPTIONS.keys()),
+            default=CHART_DEFAULT_SELECTION,
+            format_func=lambda key: CHART_OPTIONS[key],
+            key="viz_selected_charts",
+            help="Wybierz wykresy do wygenerowania na podstawie aktualnych filtrów.",
+        )
+
+        if not selected_charts:
+            st.info("Wybierz przynajmniej jeden wykres z listy powyżej.")
+
+        if "histogram" in selected_charts:
             fig = plots.histogram_threshold_distribution(df_filtered_classes)
             if fig:
                 st.pyplot(fig)
@@ -1081,7 +1250,7 @@ def main():
                     "Rozkład minimalnych progów punktowych w klasach. Przerywana linia oznacza średnią wartości."
                 )
 
-        if show_bar_district:
+        if "bar_district" in selected_charts:
             fig = plots.bar_classes_per_district(
                 df_filtered_classes, df_schools_to_display
             )
@@ -1091,7 +1260,7 @@ def main():
                     "Liczba klas licealnych w poszczególnych dzielnicach. Dłuższy słupek to więcej klas."
                 )
 
-        if show_scatter_rank:
+        if "scatter_rank" in selected_charts:
             fig = plots.scatter_rank_vs_threshold(df_schools_to_display)
             if fig:
                 st.pyplot(fig)
@@ -1099,7 +1268,7 @@ def main():
                     "Zależność pozycji w rankingu od minimalnego progu punktowego. Linia trendu pokazuje ogólną korelację."
                 )
 
-        if show_cooccurrence:
+        if "cooccurrence" in selected_charts:
             fig = plots.heatmap_subject_cooccurrence(df_filtered_classes)
             if fig:
                 st.pyplot(fig)
@@ -1107,7 +1276,7 @@ def main():
                     "Im intensywniejszy kolor, tym częściej dane przedmioty występują razem."
                 )
 
-        if show_bubble_commute:
+        if "bubble_commute" in selected_charts:
             fig = plots.bubble_prog_vs_dojazd(df_schools_to_display)
             if fig:
                 st.pyplot(fig)
