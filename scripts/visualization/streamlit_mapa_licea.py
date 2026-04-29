@@ -94,6 +94,7 @@ from visualization.generate_map import (
     add_school_markers_to_map,
 )
 from visualization import plots
+from visualization.release_notes import load_latest_release_notes
 from analysis.score import (
     add_distance_from_point,
     haversine_km,
@@ -102,6 +103,10 @@ from analysis.score import (
     shortlist_schools_by_distance,
 )
 from api_clients.googlemaps_api import build_gmaps_client, geocode_address
+
+RELEASE_NOTES_URL = (
+    "https://github.com/pszanser/licea-warszawa/blob/main/HISTORIA_ZMIAN.md"
+)
 
 FIT_DISPLAY_COLUMNS = {
     "FitScore": "Dopasowanie",
@@ -120,6 +125,19 @@ FIT_DISPLAY_COLUMNS = {
     "Dzielnica": "Dzielnica",
     "PrzedmiotyRozszerzone": "Rozszerzenia",
 }
+
+
+def render_release_notes_expander() -> None:
+    """Pokazuje w sidebarze najnowszy wpis z historii zmian."""
+    latest_release_notes = load_latest_release_notes()
+    with st.expander("🆕 Co nowego?", expanded=False):
+        if latest_release_notes:
+            st.markdown(latest_release_notes)
+        else:
+            st.caption("Historia zmian będzie dostępna po opublikowaniu aktualizacji.")
+        st.link_button("Pełna historia zmian", RELEASE_NOTES_URL)
+
+
 FIT_START_POINT_KEY = "fit_start_point"
 FIT_START_POINT_HINT_KEY = "fit_start_point_hint_shown"
 FIT_LAST_MAP_CLICK_KEY = "fit_last_map_click"
@@ -862,6 +880,7 @@ def main():
             key="selected_year",
             help="Domyślnie pokazywany jest najnowszy kompletny rok danych.",
         )
+        render_release_notes_expander()
 
     metadata = load_metadata(latest_excel_file, selected_year)
     quality = load_quality(latest_excel_file, selected_year)
