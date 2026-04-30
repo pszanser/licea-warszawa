@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 
 from scripts.pipeline import (
@@ -7,6 +9,7 @@ from scripts.pipeline import (
     apply_latest_rankings,
     best_thresholds_for_keys,
     historical_school_thresholds,
+    load_pzo_offer_tables,
     load_thresholds,
     match_reference_thresholds,
     merge_existing_year_sheets,
@@ -35,6 +38,65 @@ def test_best_thresholds_prefers_lower_priority_source():
     assert len(result) == 1
     assert result.iloc[0]["Prog_min_klasa"] == 150
     assert result.iloc[0]["threshold_year"] == 2025
+
+
+def test_load_pzo_offer_tables_downloads_missing_raw_snapshot(monkeypatch):
+    raw_dir = Path.cwd() / ".missing_pzo_unit_test"
+    calls = {}
+    snapshot = {
+        "manifest": {"school_count": 1},
+        "search_metadata": {},
+        "search_results": {},
+        "school_details": {},
+    }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            calls["client_kwargs"] = kwargs
+
+    def fake_fetch_offer_snapshot(**kwargs):
+        calls["fetch_kwargs"] = kwargs
+        return snapshot
+
+    def fake_write_snapshot_files(received_snapshot, received_raw_dir):
+        calls["write_snapshot"] = received_snapshot
+        calls["raw_dir"] = received_raw_dir
+
+    def fake_build_tables(received_snapshot):
+        calls["build_snapshot"] = received_snapshot
+        return {"schools": pd.DataFrame({"source_school_id": ["pzo:1"]})}
+
+    monkeypatch.setattr("scripts.pipeline.PzoOmikronClient", FakeClient)
+    monkeypatch.setattr(
+        "scripts.pipeline.fetch_offer_snapshot", fake_fetch_offer_snapshot
+    )
+    monkeypatch.setattr(
+        "scripts.pipeline.write_snapshot_files", fake_write_snapshot_files
+    )
+    monkeypatch.setattr("scripts.pipeline.build_pzo_tables", fake_build_tables)
+
+    result = load_pzo_offer_tables(
+        {
+            "year": 2026,
+            "school_year": "2026/2027",
+            "offer": {
+                "path": str(raw_dir),
+                "base_url": "https://example.test",
+                "public_context": "/omikron-public",
+                "school_type_ids": [4],
+                "timeout": 15,
+            },
+        }
+    )
+
+    assert calls["raw_dir"] == raw_dir
+    assert calls["write_snapshot"] is snapshot
+    assert calls["build_snapshot"] is snapshot
+    assert calls["client_kwargs"]["base_url"] == "https://example.test"
+    assert calls["client_kwargs"]["timeout"] == 15
+    assert calls["fetch_kwargs"]["year"] == 2026
+    assert calls["fetch_kwargs"]["school_type_ids"] == [4]
+    assert result["schools"]["source_school_id"].tolist() == ["pzo:1"]
 
 
 def test_school_threshold_summary_uses_one_active_year_per_school():

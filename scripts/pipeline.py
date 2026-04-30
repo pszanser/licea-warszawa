@@ -27,8 +27,11 @@ from scripts.data_processing.load_plan_naboru import load_plan_naboru
 from scripts.data_processing.get_data_pzo_omikron import (
     DEFAULT_BASE_URL as PZO_BASE_URL,
     DEFAULT_PUBLIC_CONTEXT as PZO_PUBLIC_CONTEXT,
+    PzoOmikronClient,
     build_tables as build_pzo_tables,
+    fetch_offer_snapshot,
     load_snapshot_files as load_pzo_snapshot_files,
+    write_snapshot_files,
 )
 from scripts.data_processing.parser_perspektywy import (
     parse_ranking_perspektywy_html,
@@ -1047,6 +1050,27 @@ def load_pzo_offer_tables(year_cfg: dict[str, Any]) -> dict[str, pd.DataFrame]:
         return {
             sheet: pd.read_excel(excel, sheet_name=sheet) for sheet in excel.sheet_names
         }
+    if offer_cfg.get("auto_download", True):
+        raw_dir = path if not path.suffix else path.with_suffix("")
+        logger.info(
+            "Brak lokalnego snapshotu PZO w %s; pobieram publiczny snapshot.",
+            raw_dir,
+        )
+        client = PzoOmikronClient(
+            base_url=offer_cfg.get("base_url", PZO_BASE_URL),
+            public_context=offer_cfg.get("public_context", PZO_PUBLIC_CONTEXT),
+            timeout=int(offer_cfg.get("timeout", 60)),
+        )
+        snapshot = fetch_offer_snapshot(
+            client=client,
+            year=int(year_cfg["year"]),
+            school_year=year_cfg.get("school_year", ""),
+            school_type_ids=offer_cfg.get("school_type_ids"),
+            limit_schools=offer_cfg.get("limit_schools"),
+            delay=float(offer_cfg.get("delay", 0.0)),
+        )
+        write_snapshot_files(snapshot, raw_dir)
+        return build_pzo_tables(snapshot)
     raise FileNotFoundError(
         "Brak lokalnego snapshotu PZO. Uruchom najpierw "
         "scripts/data_processing/get_data_pzo_omikron.py i sprawdź path w data_sources.yml: "

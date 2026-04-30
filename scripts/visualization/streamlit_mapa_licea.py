@@ -577,7 +577,10 @@ def _school_id_from_map_state(
     if not isinstance(map_state, dict):
         return None
     return find_school_by_map_point(
-        df_schools_to_display, map_state.get("last_object_clicked")
+        df_schools_to_display,
+        map_state.get("last_object_clicked"),
+        tooltip=map_state.get("last_object_clicked_tooltip"),
+        popup=map_state.get("last_object_clicked_popup"),
     )
 
 

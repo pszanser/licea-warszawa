@@ -1,8 +1,10 @@
+import html
 import folium
 from folium.plugins import MarkerCluster, Fullscreen, LocateControl, HeatMap
 import os
 from pathlib import Path
 import pandas as pd
+import re
 from typing import Callable, Any
 
 import sys
@@ -113,9 +115,65 @@ def _coerce_map_point(point: Any) -> tuple[float, float] | None:
         return None
 
 
+def _row_school_id(row: pd.Series) -> str | None:
+    for id_col in ["source_school_id", "SzkolaIdentyfikator"]:
+        if id_col not in row.index:
+            continue
+        value = row.get(id_col)
+        if pd.notna(value) and str(value).strip():
+            return str(value)
+    return None
+
+
+def _find_school_id_in_rows(df_schools: pd.DataFrame, school_id: str) -> str | None:
+    for id_col in ["source_school_id", "SzkolaIdentyfikator"]:
+        if id_col not in df_schools.columns:
+            continue
+        matches = df_schools[df_schools[id_col].astype(str).eq(str(school_id))]
+        if not matches.empty:
+            return str(matches.iloc[0][id_col])
+    return None
+
+
+def _school_id_from_popup(popup_html: Any) -> str | None:
+    if popup_html is None:
+        return None
+    match = re.search(
+        r"data-source-school-id=[\"']([^\"']+)[\"']",
+        str(popup_html),
+    )
+    return html.unescape(match.group(1)) if match else None
+
+
+def _normalize_map_text(value: Any) -> str:
+    text = html.unescape(str(value or ""))
+    text = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _school_id_from_tooltip(
+    df_schools: pd.DataFrame, tooltip: Any, candidate_indices: pd.Index
+) -> str | None:
+    tooltip_text = _normalize_map_text(tooltip)
+    if not tooltip_text:
+        return None
+    candidates = df_schools.loc[candidate_indices]
+    for _, row in candidates.iterrows():
+        district = row.get("Dzielnica")
+        names = [
+            _normalize_map_text(row.get("NazwaSzkoly")),
+            _normalize_map_text(f"{row.get('NazwaSzkoly')} ({district})"),
+        ]
+        if tooltip_text in names:
+            return _row_school_id(row)
+    return None
+
+
 def find_school_by_map_point(
     df_schools: pd.DataFrame,
     point: Any,
+    tooltip: Any = None,
+    popup: Any = None,
     max_distance_degrees: float = 0.0008,
 ) -> str | None:
     """Zwraca identyfikator szkoły najbliższej klikniętemu znacznikowi mapy."""
@@ -134,18 +192,24 @@ def find_school_by_map_point(
     if distance_sq.empty:
         return None
 
-    closest_idx = distance_sq.idxmin()
-    if float(distance_sq.loc[closest_idx]) > max_distance_degrees**2:
+    nearby_indices = distance_sq[distance_sq.le(max_distance_degrees**2)].index
+    if nearby_indices.empty:
         return None
 
-    row = df_schools.loc[closest_idx]
-    for id_col in ["source_school_id", "SzkolaIdentyfikator"]:
-        if id_col not in row.index:
-            continue
-        value = row.get(id_col)
-        if pd.notna(value) and str(value).strip():
-            return str(value)
-    return None
+    popup_school_id = _school_id_from_popup(popup)
+    if popup_school_id:
+        matched_id = _find_school_id_in_rows(
+            df_schools.loc[nearby_indices], popup_school_id
+        )
+        if matched_id:
+            return matched_id
+
+    tooltip_school_id = _school_id_from_tooltip(df_schools, tooltip, nearby_indices)
+    if tooltip_school_id:
+        return tooltip_school_id
+
+    closest_idx = distance_sq.idxmin()
+    return _row_school_id(df_schools.loc[closest_idx])
 
 
 def display_cell(value: Any, fallback: str = "—") -> str:
@@ -638,8 +702,14 @@ def add_school_markers_to_map(
     for _, row in df_schools_to_display.iterrows():
         tooltip_text = f"{row['NazwaSzkoly']} ({row['Dzielnica']})"
         szk_id = row.get("SzkolaIdentyfikator")
+        source_school_id = row.get("source_school_id", szk_id)
 
-        popup_html = f"<b>{row['NazwaSzkoly']}</b><br>"
+        popup_html = (
+            "<span "
+            f"data-source-school-id='{html.escape(str(source_school_id), quote=True)}' "
+            "style='display:none'></span>"
+            f"<b>{row['NazwaSzkoly']}</b><br>"
+        )
         nav_url = (
             "https://www.google.com/maps/dir/?api=1&destination="
             f"{row['SzkolaLat']},{row['SzkolaLon']}"

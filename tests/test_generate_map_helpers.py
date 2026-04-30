@@ -300,6 +300,70 @@ def test_find_school_by_map_point_returns_source_school_id():
     )
 
 
+def test_find_school_by_map_point_uses_popup_id_for_colocated_schools():
+    schools = pd.DataFrame(
+        [
+            {
+                "SzkolaIdentyfikator": "legacy_1",
+                "source_school_id": "pzo:890",
+                "NazwaSzkoly": "Liceum w zespole",
+                "Dzielnica": "Włochy",
+                "SzkolaLat": 52.18756,
+                "SzkolaLon": 20.96009,
+            },
+            {
+                "SzkolaIdentyfikator": "legacy_2",
+                "source_school_id": "pzo:892",
+                "NazwaSzkoly": "Technikum w zespole",
+                "Dzielnica": "Włochy",
+                "SzkolaLat": 52.18756,
+                "SzkolaLon": 20.96009,
+            },
+        ]
+    )
+
+    assert (
+        find_school_by_map_point(
+            schools,
+            {"lat": 52.18756, "lng": 20.96009},
+            popup="<span data-source-school-id='pzo:892'></span>",
+        )
+        == "pzo:892"
+    )
+
+
+def test_find_school_by_map_point_uses_tooltip_for_colocated_schools():
+    schools = pd.DataFrame(
+        [
+            {
+                "SzkolaIdentyfikator": "legacy_1",
+                "source_school_id": "pzo:890",
+                "NazwaSzkoly": "Liceum w zespole",
+                "Dzielnica": "Włochy",
+                "SzkolaLat": 52.18756,
+                "SzkolaLon": 20.96009,
+            },
+            {
+                "SzkolaIdentyfikator": "legacy_2",
+                "source_school_id": "pzo:892",
+                "NazwaSzkoly": "Technikum w zespole",
+                "Dzielnica": "Włochy",
+                "SzkolaLat": 52.18756,
+                "SzkolaLon": 20.96009,
+            },
+        ]
+    )
+
+    assert (
+        find_school_by_map_point(
+            schools,
+            {"lat": 52.18756, "lng": 20.96009},
+            tooltip="Technikum w zespole (Włochy)",
+        )
+        == "pzo:892"
+    )
+
+
 def test_find_school_by_map_point_ignores_plain_map_click_far_from_marker():
     schools = pd.DataFrame(
         [
