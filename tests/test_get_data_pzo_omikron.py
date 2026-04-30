@@ -1,8 +1,10 @@
 import json
 import shutil
+import uuid
 from pathlib import Path
 
 import pytest
+import requests
 
 from scripts.data_processing.get_data_pzo_omikron import (
     LABEL_CLASS_COUNT,
@@ -16,8 +18,19 @@ from scripts.data_processing.get_data_pzo_omikron import (
     build_tables,
     fetch_offer_snapshot,
     load_snapshot_files,
+    parse_int_or_none,
     write_snapshot_files,
 )
+
+
+@pytest.fixture
+def raw_output_dir():
+    output_dir = Path("tests") / f".tmp_pzo_omikron_raw_{uuid.uuid4().hex}"
+    try:
+        yield output_dir
+    finally:
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
 
 
 class FakeResponse:
@@ -28,7 +41,7 @@ class FakeResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise RuntimeError(f"HTTP {self.status_code}")
+            raise requests.HTTPError(f"HTTP {self.status_code}")
 
     def json(self):
         return self.payload
@@ -232,49 +245,38 @@ def test_fetch_offer_snapshot_downloads_metadata_search_results_and_details():
     assert [call["method"] for call in session.calls] == ["GET", "POST", "POST"]
 
 
-def test_write_snapshot_files_writes_full_raw_json():
+def test_parse_int_or_none_returns_none_for_bad_source_id():
+    assert parse_int_or_none("123") == 123
+    assert parse_int_or_none("brak-id") is None
+    assert parse_int_or_none(None) is None
+
+
+def test_write_snapshot_files_writes_full_raw_json(raw_output_dir: Path):
     client, _session = client_with_fake_session()
     snapshot = fetch_offer_snapshot(client=client)
-    output_dir = Path("tests") / ".tmp_pzo_omikron_raw"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
 
-    try:
-        write_snapshot_files(snapshot, output_dir)
+    write_snapshot_files(snapshot, raw_output_dir)
 
-        detail_path = output_dir / "school_details" / "123.json"
-        detail = json.loads(detail_path.read_text(encoding="utf-8"))
-        assert detail == sample_school_detail()
+    detail_path = raw_output_dir / "school_details" / "123.json"
+    detail = json.loads(detail_path.read_text(encoding="utf-8"))
+    assert detail == sample_school_detail()
 
-        search_path = output_dir / "search_results" / "school_type_4.json"
-        assert (
-            json.loads(search_path.read_text(encoding="utf-8"))
-            == sample_search_result()
-        )
-    finally:
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
+    search_path = raw_output_dir / "search_results" / "school_type_4.json"
+    assert json.loads(search_path.read_text(encoding="utf-8")) == sample_search_result()
 
 
-def test_load_snapshot_files_rebuilds_snapshot_from_raw_json():
+def test_load_snapshot_files_rebuilds_snapshot_from_raw_json(raw_output_dir: Path):
     client, _session = client_with_fake_session()
     snapshot = fetch_offer_snapshot(client=client)
-    output_dir = Path("tests") / ".tmp_pzo_omikron_raw"
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
 
-    try:
-        write_snapshot_files(snapshot, output_dir)
-        rebuilt = load_snapshot_files(output_dir)
+    write_snapshot_files(snapshot, raw_output_dir)
+    rebuilt = load_snapshot_files(raw_output_dir)
 
-        assert rebuilt["manifest"]["school_count"] == 1
-        assert rebuilt["search_metadata"] == snapshot["search_metadata"]
-        assert rebuilt["search_results"] == snapshot["search_results"]
-        assert rebuilt["school_details"] == snapshot["school_details"]
-        assert rebuilt["search_schools"]["123"]["schoolShort"]["logo"] == "LOGO_HASH"
-    finally:
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
+    assert rebuilt["manifest"]["school_count"] == 1
+    assert rebuilt["search_metadata"] == snapshot["search_metadata"]
+    assert rebuilt["search_results"] == snapshot["search_results"]
+    assert rebuilt["school_details"] == snapshot["school_details"]
+    assert rebuilt["search_schools"]["123"]["schoolShort"]["logo"] == "LOGO_HASH"
 
 
 def test_build_tables_maps_addresses_languages_assets_and_unknown_offer_values():

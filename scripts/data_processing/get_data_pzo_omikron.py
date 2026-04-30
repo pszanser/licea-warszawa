@@ -1,7 +1,7 @@
-"""Downloader publicznej oferty PZO/Omikron.
+"""Downloader i parser publicznej oferty PZO/Omikron.
 
-Skrypt zapisuje pełne odpowiedzi JSON jako źródło prawdy i buduje z nich
-roboczy skoroszyt analityczny. Nie podpina tego źródła do głównego pipeline'u.
+Skrypt zapisuje pełne odpowiedzi JSON jako źródło prawdy, buduje z nich roboczy
+skoroszyt analityczny i udostępnia tabele wykorzystywane przez pipeline 2026.
 """
 
 from __future__ import annotations
@@ -244,6 +244,13 @@ def school_kind_from_name(value: Any) -> str:
     return clean_text(value)
 
 
+def parse_int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def extract_search_school_items(search_result: Any) -> list[JsonDict]:
     """Wyciąga listę szkół z odpowiedzi searchSubmit niezależnie od opakowania."""
     if isinstance(search_result, list):
@@ -285,7 +292,7 @@ def search_school_id(item: JsonDict) -> int | None:
     value = get_nested(item, "schoolShort", "id")
     if value is None:
         value = first_present(item.get("schoolId"), item.get("id"))
-    return int(value) if value is not None else None
+    return parse_int_or_none(value)
 
 
 def detail_school_id(detail: JsonDict) -> int | None:
@@ -294,7 +301,7 @@ def detail_school_id(detail: JsonDict) -> int | None:
         value = get_nested(detail, "schoolOffer", "schoolShort", "id")
     if value is None:
         value = get_nested(detail, "schoolOffer", "id")
-    return int(value) if value is not None else None
+    return parse_int_or_none(value)
 
 
 def admission_points(detail: JsonDict) -> list[JsonDict]:
@@ -378,8 +385,10 @@ def fetch_offer_snapshot(
         try:
             details[str(school_id)] = client.school_details(school_id)
         except (
-            Exception
-        ) as exc:  # noqa: BLE001 - snapshot ma przerwać na każdym błędzie
+            ValueError,
+            requests.RequestException,
+            json.JSONDecodeError,
+        ) as exc:
             failed_details.append({"school_id": str(school_id), "error": str(exc)})
         if delay > 0:
             time.sleep(delay)
@@ -476,7 +485,9 @@ def load_snapshot_files(raw_dir: Path) -> JsonDict:
                 continue
             search_schools.setdefault(school_key, item)
             rebuilt_type_ids_by_school.setdefault(school_key, [])
-            numeric_type_id = int(school_type_id)
+            numeric_type_id = parse_int_or_none(school_type_id)
+            if numeric_type_id is None:
+                continue
             if numeric_type_id not in rebuilt_type_ids_by_school[school_key]:
                 rebuilt_type_ids_by_school[school_key].append(numeric_type_id)
 

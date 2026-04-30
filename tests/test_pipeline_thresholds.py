@@ -4,6 +4,7 @@ import pandas as pd
 
 from scripts.pipeline import (
     add_common_class_columns,
+    add_year_metadata,
     add_threshold_usage_labels,
     apply_threshold_matches,
     apply_latest_rankings,
@@ -97,6 +98,31 @@ def test_load_pzo_offer_tables_downloads_missing_raw_snapshot(monkeypatch):
     assert calls["fetch_kwargs"]["year"] == 2026
     assert calls["fetch_kwargs"]["school_type_ids"] == [4]
     assert result["schools"]["source_school_id"].tolist() == ["pzo:1"]
+
+
+def test_add_year_metadata_preserves_row_threshold_labels():
+    df = pd.DataFrame({"threshold_label": ["fallback: progi 2024", ""]})
+
+    add_year_metadata(
+        df,
+        {
+            "year": 2026,
+            "admission_year": 2026,
+            "school_year": "2026/2027",
+            "data_status": "official_offer",
+            "status_label": "oficjalna oferta 2026/2027",
+        },
+        {
+            "threshold_mode": "reference",
+            "threshold_label": "progi referencyjne 2025",
+            "threshold_years": "2025/2024",
+        },
+    )
+
+    assert df["threshold_label"].tolist() == [
+        "fallback: progi 2024",
+        "progi referencyjne 2025",
+    ]
 
 
 def test_school_threshold_summary_uses_one_active_year_per_school():
@@ -266,6 +292,67 @@ def test_match_reference_thresholds_marks_exact_match_as_trusted():
     assert classes_with_thresholds.iloc[0]["ProgUsedLevel"] == (
         "klasowy 2025 - dokładny"
     )
+
+
+def test_match_reference_thresholds_uses_best_priority_per_school():
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1", "pzo:2"],
+            "source_class_id": ["pzo:101", "pzo:201"],
+            "SzkolaIdentyfikator": ["lo_1", "lo_2"],
+            "OddzialNazwa": [
+                "1A - (O) - mat, fiz (ang - niem)",
+                "1A - (O) - mat, geo (ang - niem)",
+            ],
+            "OddzialKod": ["1A", "1A"],
+            "TypOddzialu": ["ogólnodostępny", "ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, fizyka", "matematyka, geografia"],
+            "PierwszyJezykObcy": ["język angielski", "język angielski"],
+            "DrugiJezykObcy": ["język niemiecki", "język niemiecki"],
+        }
+    )
+    thresholds = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_2"],
+            "OddzialNazwa": [
+                "1A [O] mat-fiz (ang-niem)",
+                "1A [O] mat-geo (ang-niem)",
+            ],
+            "SymbolOddzialu": ["1A", "1A"],
+            "Prog_min_klasa": [150, 140],
+            "threshold_year": [2025, 2024],
+            "threshold_kind": ["reference", "reference_fallback"],
+            "threshold_priority": [1, 2],
+            "threshold_label": ["progi referencyjne 2025", "fallback: progi 2024"],
+        }
+    )
+
+    _matches, selected = match_reference_thresholds(classes, thresholds)
+
+    assert set(selected["source_class_id"]) == {"pzo:101", "pzo:201"}
+    lo_2 = selected[selected["source_class_id"].eq("pzo:201")].iloc[0]
+    assert lo_2["threshold_year"] == 2024
+    assert lo_2["threshold_label"] == "fallback: progi 2024"
+
+
+def test_add_threshold_usage_labels_uses_actual_threshold_years():
+    classes = pd.DataFrame(
+        {
+            "ProgMatchStatus": ["trusted", "approximate", "school_only"],
+            "Prog_min_klasa": [150, 140, pd.NA],
+            "Prog_min_szkola": [130, 130, 120],
+            "threshold_year": [2024, 2025, pd.NA],
+            "Prog_szkola_threshold_year": [2024, 2025, 2024],
+        }
+    )
+
+    result = add_threshold_usage_labels(classes)
+
+    assert result["ProgUsedLevel"].tolist() == [
+        "klasowy 2024 - dokładny",
+        "klasowy 2025 - przybliżony",
+        "szkolny 2024 - brak dopasowania klasy",
+    ]
 
 
 def test_match_reference_thresholds_marks_weaker_but_coded_match_as_approximate():

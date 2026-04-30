@@ -6,6 +6,7 @@ st.set_page_config(
     layout="wide",
 )
 
+import logging
 import sys
 import os
 from pathlib import Path
@@ -15,6 +16,8 @@ import folium
 from folium.plugins import Fullscreen, LocateControl, HeatMap
 from streamlit_folium import st_folium
 import io
+
+logger = logging.getLogger(__name__)
 
 # Wszystkie etykiety widżetów zapisane w jednym miejscu,
 # co ułatwia ewentualne modyfikacje i umożliwia resetowanie
@@ -451,8 +454,17 @@ def load_year_sheet_cached(
     _ = data_version
     try:
         df = pd.read_excel(excel_file, sheet_name=sheet_name)
-    except Exception:
+    except (ValueError, KeyError, pd.errors.EmptyDataError):
+        logger.info("Pomijam brak arkusza %s w %s", sheet_name, excel_file)
         return pd.DataFrame()
+    except FileNotFoundError:
+        logger.warning("Brak pliku danych %s", excel_file)
+        return pd.DataFrame()
+    except Exception:
+        logger.exception(
+            "Nie udało się wczytać arkusza %s z pliku %s", sheet_name, excel_file
+        )
+        raise
     if selected_year is not None and "year" in df.columns:
         df = df[df["year"] == selected_year].copy()
     return df

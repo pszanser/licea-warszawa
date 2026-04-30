@@ -234,7 +234,7 @@ def test_popup_class_threshold_includes_year():
                     "nazwa": "1A - mat, geo, ang",
                     "url": None,
                     "min_pkt_klasy": 169.15,
-                    "threshold_year": 2025,
+                    "threshold_year": pd.Series([2025], dtype="int64").iloc[0],
                 }
             ]
         },
@@ -258,7 +258,25 @@ def test_popup_uses_school_page_label_for_school_url():
 
     html = m.get_root().render()
     assert "Strona szkoły" in html
+    assert "noopener noreferrer" in html
     assert "Zobacz ofertę szkoły" not in html
+
+
+def test_popup_omits_invalid_school_url():
+    row = {**_SCHOOL_ROW, "url": "javascript:alert(1)"}
+    df = pd.DataFrame([row])
+    m = folium.Map(location=[52.23, 21.01], zoom_start=11)
+    add_school_markers_to_map(
+        folium_map_object=m,
+        df_schools_to_display=df,
+        class_count_per_school={},
+        filtered_class_details_per_school={},
+        school_summary_from_filtered={},
+    )
+
+    html = m.get_root().render()
+    assert "Strona szkoły" not in html
+    assert "javascript:alert" not in html
 
 
 def test_streamlit_popup_can_show_details_hint_under_map():

@@ -65,8 +65,6 @@ THRESHOLD_COLUMNS = [
     "school_year",
 ]
 
-PZO_DETAIL_SHEETS = ["school_details", "class_details", "threshold_matches"]
-
 REPL = {
     r"liceum og[oó]lnokszta[łl]c[a-ząćęłńóśźż]*": "lo",
     r"im(?:\.|ienia)?": "",
@@ -536,6 +534,19 @@ def format_threshold_value(value: Any) -> str:
     return str(int(number)) if number.is_integer() else f"{number:.2f}".rstrip("0")
 
 
+def format_threshold_year(value: Any) -> str:
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return safe_text(value).strip()
+    return str(int(number)) if number.is_integer() else str(number)
+
+
 def format_threshold_range(min_value: Any, max_value: Any) -> str:
     min_text = format_threshold_value(min_value)
     max_text = format_threshold_value(max_value)
@@ -764,6 +775,26 @@ def threshold_meta(year_cfg: dict[str, Any]) -> dict[str, Any]:
         "threshold_years": "/".join(years),
         "threshold_source": " | ".join(str(ref) for ref in source_refs if ref),
     }
+
+
+def add_year_metadata(
+    df: pd.DataFrame, year_cfg: dict[str, Any], threshold_info: dict[str, Any]
+) -> None:
+    df["year"] = year_cfg["year"]
+    df["admission_year"] = year_cfg.get("admission_year")
+    df["school_year"] = year_cfg.get("school_year")
+    df["data_status"] = year_cfg.get("data_status")
+    df["status_label"] = year_cfg.get("status_label")
+    df["threshold_mode"] = threshold_info["threshold_mode"]
+    if "threshold_label" not in df.columns:
+        df["threshold_label"] = threshold_info["threshold_label"]
+    else:
+        empty_label = df["threshold_label"].apply(
+            lambda value: not safe_text(value).strip()
+        )
+        df.loc[empty_label, "threshold_label"] = threshold_info["threshold_label"]
+    if "threshold_years" not in df.columns:
+        df["threshold_years"] = threshold_info["threshold_years"]
 
 
 def load_ranking(year_cfg: dict[str, Any]) -> pd.DataFrame:
@@ -1367,9 +1398,11 @@ def match_reference_thresholds(
     thresholds = df_thresholds.copy()
     thresholds["threshold_priority"] = pd.to_numeric(
         thresholds["threshold_priority"], errors="coerce"
-    )
-    primary_priority = thresholds["threshold_priority"].min()
-    thresholds = thresholds[thresholds["threshold_priority"].eq(primary_priority)]
+    ).fillna(999)
+    active_priority = thresholds.groupby("SzkolaIdentyfikator")[
+        "threshold_priority"
+    ].transform("min")
+    thresholds = thresholds[thresholds["threshold_priority"].eq(active_priority)]
     thresholds = prepare_threshold_features(thresholds)
     classes = prepare_current_class_features(df_classes)
 
@@ -1587,9 +1620,37 @@ def add_threshold_usage_labels(df_classes: pd.DataFrame) -> pd.DataFrame:
         classes["ProgMatchStatus"].eq("approximate") & classes["Prog_min_klasa"].notna()
     )
     school_only = classes["Prog_min_klasa"].isna() & classes["Prog_min_szkola"].notna()
-    classes.loc[trusted, "ProgUsedLevel"] = "klasowy 2025 - dokładny"
-    classes.loc[approximate, "ProgUsedLevel"] = "klasowy 2025 - przybliżony"
-    classes.loc[school_only, "ProgUsedLevel"] = "szkolny 2025 - brak dopasowania klasy"
+    class_years = (
+        classes["threshold_year"]
+        if "threshold_year" in classes.columns
+        else pd.Series(pd.NA, index=classes.index)
+    )
+    school_years = (
+        classes["Prog_szkola_threshold_year"]
+        if "Prog_szkola_threshold_year" in classes.columns
+        else pd.Series(pd.NA, index=classes.index)
+    )
+    classes.loc[trusted, "ProgUsedLevel"] = class_years[trusted].apply(
+        lambda value: (
+            f"klasowy {format_threshold_year(value)} - dokładny"
+            if format_threshold_year(value)
+            else "klasowy - dokładny"
+        )
+    )
+    classes.loc[approximate, "ProgUsedLevel"] = class_years[approximate].apply(
+        lambda value: (
+            f"klasowy {format_threshold_year(value)} - przybliżony"
+            if format_threshold_year(value)
+            else "klasowy - przybliżony"
+        )
+    )
+    classes.loc[school_only, "ProgUsedLevel"] = school_years[school_only].apply(
+        lambda value: (
+            f"szkolny {format_threshold_year(value)} - brak dopasowania klasy"
+            if format_threshold_year(value)
+            else "szkolny - brak dopasowania klasy"
+        )
+    )
     return classes
 
 
@@ -1802,14 +1863,7 @@ def build_vulcan_year(
 
     threshold_info = threshold_meta(year_cfg)
     for df in [df_schools, df_classes, df_thresholds, df_ranking]:
-        df["year"] = year_cfg["year"]
-        df["admission_year"] = year_cfg.get("admission_year")
-        df["school_year"] = year_cfg.get("school_year")
-        df["data_status"] = year_cfg.get("data_status")
-        df["status_label"] = year_cfg.get("status_label")
-        df["threshold_mode"] = threshold_info["threshold_mode"]
-        df["threshold_label"] = threshold_info["threshold_label"]
-        df["threshold_years"] = threshold_info["threshold_years"]
+        add_year_metadata(df, year_cfg, threshold_info)
 
     return {
         "schools": df_schools,
@@ -1929,14 +1983,7 @@ def build_pzo_year(
     for df in frames_for_meta:
         if df.empty:
             continue
-        df["year"] = year_cfg["year"]
-        df["admission_year"] = year_cfg.get("admission_year")
-        df["school_year"] = year_cfg.get("school_year")
-        df["data_status"] = year_cfg.get("data_status")
-        df["status_label"] = year_cfg.get("status_label")
-        df["threshold_mode"] = threshold_info["threshold_mode"]
-        df["threshold_label"] = threshold_info["threshold_label"]
-        df["threshold_years"] = threshold_info["threshold_years"]
+        add_year_metadata(df, year_cfg, threshold_info)
 
     school_details = build_school_details(df_schools)
     class_details = build_class_details(df_classes, criteria_summary)
@@ -2088,14 +2135,7 @@ def build_plan_year(
 
     threshold_info = threshold_meta(year_cfg)
     for df in [df_schools, df_classes, df_thresholds, df_ranking, df_plan]:
-        df["year"] = year_cfg["year"]
-        df["admission_year"] = year_cfg.get("admission_year")
-        df["school_year"] = year_cfg.get("school_year")
-        df["data_status"] = year_cfg.get("data_status")
-        df["status_label"] = year_cfg.get("status_label")
-        df["threshold_mode"] = threshold_info["threshold_mode"]
-        df["threshold_label"] = threshold_info["threshold_label"]
-        df["threshold_years"] = threshold_info["threshold_years"]
+        add_year_metadata(df, year_cfg, threshold_info)
 
     return {
         "schools": df_schools,

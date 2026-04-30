@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import re
 from typing import Callable, Any
+from urllib.parse import urlparse
 
 import sys
 
@@ -149,6 +150,31 @@ def _normalize_map_text(value: Any) -> str:
     text = html.unescape(str(value or ""))
     text = re.sub(r"<[^>]+>", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _safe_popup_href(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    parsed = urlparse(text)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return html.escape(text, quote=True)
+
+
+def _threshold_year_prefix(value: Any) -> str:
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    try:
+        year = int(float(value))
+    except (TypeError, ValueError):
+        return ""
+    return f"{year}: "
 
 
 def _school_id_from_tooltip(
@@ -763,9 +789,7 @@ def add_school_markers_to_map(
             max_prog = summary.get("Prog_max_szkola", row.get("Prog_max_szkola"))
             if pd.notna(min_prog) and pd.notna(max_prog):
                 threshold_year = row.get("Prog_szkola_threshold_year")
-                year_prefix = (
-                    f"{int(threshold_year)}: " if pd.notna(threshold_year) else ""
-                )
+                year_prefix = _threshold_year_prefix(threshold_year)
                 if min_prog == max_prog:
                     popup_html += f"Progi punktowe:<br>{year_prefix}{min_prog}<br>"
                 else:
@@ -790,10 +814,15 @@ def add_school_markers_to_map(
                 class_min_pkt = class_detail.get("min_pkt_klasy")
 
                 line = "- "
-                if pd.notna(class_url):
-                    line += f"<a href='{class_url}' target='_blank'>{class_name}</a>"
+                safe_class_url = _safe_popup_href(class_url)
+                safe_class_name = html.escape(str(class_name), quote=False)
+                if safe_class_url:
+                    line += (
+                        f"<a href='{safe_class_url}' target='_blank' "
+                        f"rel='noopener noreferrer'>{safe_class_name}</a>"
+                    )
                 else:
-                    line += class_name
+                    line += safe_class_name
 
                 if class_min_pkt is not None and pd.notna(class_min_pkt):
                     class_min_pkt_float = float(class_min_pkt)
@@ -803,19 +832,16 @@ def add_school_markers_to_map(
                         else class_min_pkt_float
                     )
                     threshold_year = class_detail.get("threshold_year")
-                    threshold_prefix = ""
-                    try:
-                        if pd.notna(threshold_year) and isinstance(
-                            threshold_year, (int, float, str)
-                        ):
-                            threshold_prefix = f"{int(float(threshold_year))}: "
-                    except (TypeError, ValueError):
-                        threshold_prefix = ""
+                    threshold_prefix = _threshold_year_prefix(threshold_year)
                     line += f" ({threshold_prefix}{formatted_min_pkt})"
                 popup_html += line + "<br>"
 
-        if "url" in row and pd.notna(row["url"]):
-            popup_html += f"<a href='{row['url']}' target='_blank'>Strona szkoły</a>"
+        school_url = _safe_popup_href(row.get("url"))
+        if school_url:
+            popup_html += (
+                f"<a href='{school_url}' target='_blank' "
+                "rel='noopener noreferrer'>Strona szkoły</a>"
+            )
 
         popup_html = f"<div style='font-size:14px; line-height:1.2;'>{popup_html}</div>"
 
