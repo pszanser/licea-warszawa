@@ -2,6 +2,28 @@
 
 Krótka historia zmian w aplikacji. Najnowsze wpisy są na górze.
 
+## 2026-04-30 - Oficjalna oferta 2026/2027
+
+### Nowe
+
+- Pełna oferta klas 2026/2027 wraz z wieloma dodatkowymi informacjami.
+- Moje dopasowania - rozbudowanie o dodatkowe informacje dla klas i szkół.
+- Po wybraniu szkoły na mapie pod mapą pojawia się wygodny panel ze szczegółami danej szkoły oraz jej klas, m.in. miejsca, języki, rozszerzenia, opis profilu, kryteria punktowane.
+- Link w dymku mapy prowadzi do strony szkoły.
+
+### Dane
+
+- Dodano oficjalne adresy, współrzędne, kontakty, strony WWW, języki, rozszerzenia,
+  opisy szkół i klas z publicznych danych PZO.
+- Progi dla klas 2026 są dopasowywane do historycznych klas 2025, a gdy nie ma
+  dobrego dopasowania, aplikacja jasno pokazuje odniesienie do progu szkolnego.
+
+### Poprawki
+
+- Stabilniejsze wybieranie szkoły z mapy, także gdy kilka szkół ma te same
+  współrzędne lub różne identyfikatory źródłowe.
+- Bezpieczniejsze generowanie dymków mapy na podstawie danych zewnętrznych.
+
 ## 2026-04-29 - Dopasowanie szkół
 
 ### Nowe

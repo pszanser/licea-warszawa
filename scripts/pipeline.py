@@ -1,6 +1,8 @@
 import argparse
 import asyncio
 import datetime
+import difflib
+import json
 import logging
 import os
 import re
@@ -8,6 +10,7 @@ import time
 import unicodedata
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pandas as pd
 import requests
@@ -21,6 +24,15 @@ from scripts.api_clients.googlemaps_api import (
 from scripts.config.constants import ALL_SUBJECTS
 from scripts.data_processing.load_minimum_points import load_min_points
 from scripts.data_processing.load_plan_naboru import load_plan_naboru
+from scripts.data_processing.get_data_pzo_omikron import (
+    DEFAULT_BASE_URL as PZO_BASE_URL,
+    DEFAULT_PUBLIC_CONTEXT as PZO_PUBLIC_CONTEXT,
+    PzoOmikronClient,
+    build_tables as build_pzo_tables,
+    fetch_offer_snapshot,
+    load_snapshot_files as load_pzo_snapshot_files,
+    write_snapshot_files,
+)
 from scripts.data_processing.parser_perspektywy import (
     parse_ranking_perspektywy_html,
     parse_ranking_perspektywy_pdf,
@@ -47,6 +59,7 @@ THRESHOLD_COLUMNS = [
     "threshold_label",
     "threshold_source",
     "SzkolaIdentyfikator",
+    "SymbolOddzialu",
     "year",
     "admission_year",
     "school_year",
@@ -106,6 +119,284 @@ def extract_class_type(class_name: str) -> str | None:
         return None
     m = re.search(r"\[([^\]]+)\]", str(class_name))
     return m.group(1).strip() if m else None
+
+
+SUBJECT_MATCH_ALIASES = {
+    "matematyka": "mat",
+    "mat": "mat",
+    "język angielski": "ang",
+    "jezyk angielski": "ang",
+    "angielski": "ang",
+    "ang": "ang",
+    "biologia": "biol",
+    "biol": "biol",
+    "chemia": "chem",
+    "chem": "chem",
+    "fizyka": "fiz",
+    "fiz": "fiz",
+    "geografia": "geo",
+    "geogr": "geo",
+    "geo": "geo",
+    "informatyka": "inf",
+    "inf": "inf",
+    "wiedza o społeczeństwie": "wos",
+    "wiedza o spoleczenstwie": "wos",
+    "wos": "wos",
+    "historia": "his",
+    "hist": "his",
+    "his": "his",
+    "język polski": "pol",
+    "jezyk polski": "pol",
+    "polski": "pol",
+    "pol": "pol",
+    "biznes": "biz",
+    "biz": "biz",
+    "język hiszpański": "hiszp",
+    "jezyk hiszpanski": "hiszp",
+    "hiszpański": "hiszp",
+    "hiszpanski": "hiszp",
+    "hiszp": "hiszp",
+    "hisz": "hiszp",
+    "język niemiecki": "niem",
+    "jezyk niemiecki": "niem",
+    "niemiecki": "niem",
+    "niem": "niem",
+    "język francuski": "franc",
+    "jezyk francuski": "franc",
+    "francuski": "franc",
+    "franc": "franc",
+    "fra": "franc",
+    "język włoski": "wlos",
+    "jezyk wloski": "wlos",
+    "włoski": "wlos",
+    "wloski": "wlos",
+    "wlo": "wlos",
+}
+
+LANGUAGE_MATCH_ALIASES = {
+    "angielski": "ang",
+    "ang": "ang",
+    "gb": "ang",
+    "niemiecki": "niem",
+    "niem": "niem",
+    "de": "niem",
+    "hiszpański": "hiszp",
+    "hiszpanski": "hiszp",
+    "hisz": "hiszp",
+    "hiszp": "hiszp",
+    "es": "hiszp",
+    "francuski": "franc",
+    "franc": "franc",
+    "fr": "franc",
+    "fra": "franc",
+    "rosyjski": "ros",
+    "ros": "ros",
+    "ru": "ros",
+    "włoski": "wlos",
+    "wloski": "wlos",
+    "wlo": "wlos",
+    "wł": "wlos",
+    "wl": "wlos",
+    "it": "wlos",
+    "łacina": "lac",
+    "lacina": "lac",
+    "lac": "lac",
+}
+
+CLASS_TYPE_ALIASES = {
+    "ogolnodostepny": "O",
+    "ogólnodostępny": "O",
+    "dwujezyczny": "D",
+    "dwujęzyczny": "D",
+    "wstepny": "W",
+    "wstępny": "W",
+    "integracyjny": "I",
+    "sportowy": "S",
+    "mistrzostwa sportowego": "MS",
+}
+
+ORDINAL_TO_COLUMN = {
+    "pierwszy": "Punktowany1",
+    "drugi": "Punktowany2",
+    "trzeci": "Punktowany3",
+    "czwarty": "Punktowany4",
+}
+
+
+def safe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value)
+
+
+def ascii_key(value: Any) -> str:
+    text = safe_text(value).lower()
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def compact_code(value: Any) -> str:
+    text = safe_text(value).upper()
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"[^A-Z0-9]+", "", text)
+
+
+def extract_class_code(name: Any, explicit_code: Any = None) -> str:
+    explicit = compact_code(explicit_code)
+    if explicit:
+        return explicit
+    text = safe_text(name).strip()
+    if not text:
+        return ""
+    head = re.split(r"\s+-\s+|\s+\[|\s+\(", text, maxsplit=1)[0]
+    return compact_code(head)
+
+
+def class_code_base(value: Any) -> str:
+    code = compact_code(value)
+    match = re.match(r"^(1?[A-Z]+|1?\d+[A-Z]+)", code)
+    return match.group(1) if match else code[:3]
+
+
+def class_code_similarity(current_code: Any, old_code: Any) -> tuple[float, str]:
+    current = compact_code(current_code)
+    old = compact_code(old_code)
+    if current and old and current == old:
+        return 1.0, "code_exact"
+    if current and old:
+        current_core = current.removeprefix("1")
+        old_core = old.removeprefix("1")
+        if current_core == old_core:
+            return 0.9, "code_core"
+        if (current.startswith(old) or old.startswith(current)) and min(
+            len(current), len(old)
+        ) >= 2:
+            return 0.75, "code_prefix"
+    if class_code_base(current) and class_code_base(current) == class_code_base(old):
+        return 0.55, "code_base"
+    return 0.0, ""
+
+
+def token_set_from_text(value: Any, aliases: dict[str, str]) -> tuple[str, ...]:
+    text = safe_text(value)
+    normalized = ascii_key(text)
+    words = set(normalized.split())
+    tokens: list[str] = []
+    for source, token in sorted(aliases.items(), key=lambda item: -len(item[0])):
+        source_key = ascii_key(source)
+        if not source_key:
+            continue
+        if " " in source_key or len(source_key) > 3:
+            if re.search(rf"\b{re.escape(source_key)}\b", normalized):
+                tokens.append(token)
+        elif source_key in words:
+            tokens.append(token)
+    return tuple(sorted(set(tokens)))
+
+
+def class_profile_text_from_name(value: Any) -> str:
+    """Wyciąga część profilu z nazwy oddziału, bez typu i języków w nawiasie."""
+    text = safe_text(value)
+    if not text:
+        return ""
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = re.sub(r"\[[^\]]*\]", " ", text)
+    parts = [part.strip() for part in re.split(r"\s+-\s+", text) if part.strip()]
+    if parts:
+        text = parts[-1]
+    text = re.sub(r"^\s*\d*\s*[A-Za-z]+\d*\s+", " ", text)
+    return text
+
+
+def class_subject_tokens(row: pd.Series) -> tuple[str, ...]:
+    text = " ".join(
+        safe_text(row.get(col))
+        for col in [
+            "PrzedmiotyRozszerzone",
+            "Zawod",
+            "DyscyplinaSportowa",
+        ]
+    )
+    text = f"{text} {class_profile_text_from_name(row.get('OddzialNazwa'))}"
+    return token_set_from_text(text, SUBJECT_MATCH_ALIASES)
+
+
+def class_language_tokens(row: pd.Series) -> tuple[str, ...]:
+    text = " ".join(
+        safe_text(row.get(col))
+        for col in [
+            "JezykiObce",
+            "PierwszyJezykObcy",
+            "DrugiJezykObcy",
+            "JezykiObceIkonyOpis",
+            "OddzialNazwa",
+        ]
+    )
+    return token_set_from_text(text, LANGUAGE_MATCH_ALIASES)
+
+
+def class_type_token(name: Any, explicit_type: Any = None) -> str:
+    text = safe_text(name)
+    match = re.search(r"\[([^\]]+)\]|\(([A-Z]{1,3}(?:/[io])?)\)", text)
+    if match:
+        return ascii_key(match.group(1) or match.group(2)).upper()
+    explicit = safe_text(explicit_type)
+    explicit_key = ascii_key(explicit)
+    for key, value in CLASS_TYPE_ALIASES.items():
+        if ascii_key(key) in explicit_key:
+            return value
+    return explicit_key.upper()
+
+
+def jaccard_score(left: tuple[str, ...], right: tuple[str, ...]) -> float:
+    left_set = set(left)
+    right_set = set(right)
+    if not left_set or not right_set:
+        return 0.0
+    return len(left_set & right_set) / len(left_set | right_set)
+
+
+def text_similarity(left: Any, right: Any) -> float:
+    return difflib.SequenceMatcher(None, ascii_key(left), ascii_key(right)).ratio()
+
+
+def preview_text(value: Any, limit: int = 500) -> str:
+    text = safe_text(value).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].strip() + "..."
+
+
+def normalize_address(value: Any) -> str:
+    text = ascii_key(value)
+    text = re.sub(r"\b(ul|al|aleja|pl|plac|warszawa)\b", " ", text)
+    text = re.sub(r"\b\d{2}\s*\d{3}\b", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def pzo_search_url(school_type_ids: Any = "") -> str:
+    first_type = safe_text(school_type_ids).split(",", 1)[0].strip()
+    payload: dict[str, Any] = {
+        "noRecrutation": False,
+        "otherRecrutation": False,
+        "freePlaces": False,
+        "recrutationModule": True,
+        "offerMap": {},
+        "connective": {},
+        "chosenOperatorMap": {},
+    }
+    if first_type:
+        payload["schoolTypeId"] = int(first_type)
+    query = quote(json.dumps(payload, ensure_ascii=False, sort_keys=True), safe="")
+    return f"{PZO_BASE_URL}{PZO_PUBLIC_CONTEXT}/offer/search/results?q={query}"
 
 
 def ensure_source_file(source: dict[str, Any]) -> Path:
@@ -241,6 +532,19 @@ def format_threshold_value(value: Any) -> str:
         return ""
     number = float(value)
     return str(int(number)) if number.is_integer() else f"{number:.2f}".rstrip("0")
+
+
+def format_threshold_year(value: Any) -> str:
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return safe_text(value).strip()
+    return str(int(number)) if number.is_integer() else str(number)
 
 
 def format_threshold_range(min_value: Any, max_value: Any) -> str:
@@ -473,6 +777,26 @@ def threshold_meta(year_cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def add_year_metadata(
+    df: pd.DataFrame, year_cfg: dict[str, Any], threshold_info: dict[str, Any]
+) -> None:
+    df["year"] = year_cfg["year"]
+    df["admission_year"] = year_cfg.get("admission_year")
+    df["school_year"] = year_cfg.get("school_year")
+    df["data_status"] = year_cfg.get("data_status")
+    df["status_label"] = year_cfg.get("status_label")
+    df["threshold_mode"] = threshold_info["threshold_mode"]
+    if "threshold_label" not in df.columns:
+        df["threshold_label"] = threshold_info["threshold_label"]
+    else:
+        empty_label = df["threshold_label"].apply(
+            lambda value: not safe_text(value).strip()
+        )
+        df.loc[empty_label, "threshold_label"] = threshold_info["threshold_label"]
+    if "threshold_years" not in df.columns:
+        df["threshold_years"] = threshold_info["threshold_years"]
+
+
 def load_ranking(year_cfg: dict[str, Any]) -> pd.DataFrame:
     ranking_cfg = year_cfg.get("ranking")
     if not ranking_cfg:
@@ -531,7 +855,10 @@ def load_location_cache() -> pd.DataFrame:
             for col in [
                 "source_school_id",
                 "SzkolaIdentyfikator",
+                "NazwaSzkoly",
                 "AdresSzkoly",
+                "TypSzkoly",
+                "year",
                 "CzasDojazdu",
                 "SzkolaLat",
                 "SzkolaLon",
@@ -744,6 +1071,702 @@ def add_common_class_columns(df_classes: pd.DataFrame) -> pd.DataFrame:
     return df_classes
 
 
+def load_pzo_offer_tables(year_cfg: dict[str, Any]) -> dict[str, pd.DataFrame]:
+    offer_cfg = year_cfg["offer"]
+    path = resolve_path(offer_cfg["path"])
+    if path.is_dir():
+        return build_pzo_tables(load_pzo_snapshot_files(path))
+    if path.suffix.lower() in {".xlsx", ".xlsm", ".xls"} and path.exists():
+        excel = pd.ExcelFile(path)
+        return {
+            sheet: pd.read_excel(excel, sheet_name=sheet) for sheet in excel.sheet_names
+        }
+    if offer_cfg.get("auto_download", True):
+        raw_dir = path if not path.suffix else path.with_suffix("")
+        logger.info(
+            "Brak lokalnego snapshotu PZO w %s; pobieram publiczny snapshot.",
+            raw_dir,
+        )
+        client = PzoOmikronClient(
+            base_url=offer_cfg.get("base_url", PZO_BASE_URL),
+            public_context=offer_cfg.get("public_context", PZO_PUBLIC_CONTEXT),
+            timeout=int(offer_cfg.get("timeout", 60)),
+        )
+        snapshot = fetch_offer_snapshot(
+            client=client,
+            year=int(year_cfg["year"]),
+            school_year=year_cfg.get("school_year", ""),
+            school_type_ids=offer_cfg.get("school_type_ids"),
+            limit_schools=offer_cfg.get("limit_schools"),
+            delay=float(offer_cfg.get("delay", 0.0)),
+        )
+        write_snapshot_files(snapshot, raw_dir)
+        return build_pzo_tables(snapshot)
+    raise FileNotFoundError(
+        "Brak lokalnego snapshotu PZO. Uruchom najpierw "
+        "scripts/data_processing/get_data_pzo_omikron.py i sprawdź path w data_sources.yml: "
+        f"{path}"
+    )
+
+
+def reference_schools_from_cache(location_cache: pd.DataFrame) -> pd.DataFrame:
+    if location_cache.empty or "SzkolaIdentyfikator" not in location_cache.columns:
+        return pd.DataFrame()
+    refs = location_cache.copy()
+    if "year" in refs.columns:
+        years = pd.to_numeric(refs["year"], errors="coerce")
+        refs = refs[years.eq(2025)]
+    required = ["SzkolaIdentyfikator", "NazwaSzkoly", "AdresSzkoly", "TypSzkoly"]
+    missing = [col for col in required if col not in refs.columns]
+    if missing:
+        return pd.DataFrame()
+    refs = refs.dropna(subset=["SzkolaIdentyfikator", "NazwaSzkoly"])
+    return refs[required].drop_duplicates("SzkolaIdentyfikator")
+
+
+def attach_stable_school_ids(
+    df_schools: pd.DataFrame,
+    df_classes: pd.DataFrame,
+    reference_schools: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    schools = df_schools.copy()
+    classes = df_classes.copy()
+    if reference_schools.empty:
+        schools["SzkolaIdentyfikator"] = schools["NazwaSzkoly"].apply(normalize_name)
+        schools["PzoSchoolMatchStatus"] = "fallback_name"
+        schools["PzoSchoolMatchScore"] = pd.NA
+    else:
+        refs = reference_schools.copy()
+        refs["addr_key"] = refs["AdresSzkoly"].apply(normalize_address)
+        refs["name_key"] = refs["NazwaSzkoly"].apply(ascii_key)
+        refs["type_key"] = refs["TypSzkoly"].apply(ascii_key)
+
+        mapped_rows = []
+        for row in schools.itertuples(index=False):
+            address_key = normalize_address(getattr(row, "AdresSzkoly", ""))
+            type_key = ascii_key(getattr(row, "TypSzkoly", ""))
+            name_key = ascii_key(getattr(row, "NazwaSzkoly", ""))
+            candidates = refs.copy()
+            if type_key and "type_key" in candidates:
+                same_type = candidates[candidates["type_key"].eq(type_key)]
+                if not same_type.empty:
+                    candidates = same_type
+
+            exact_address = candidates[candidates["addr_key"].eq(address_key)]
+            if not exact_address.empty:
+                scored = exact_address.copy()
+                scored["score"] = scored["name_key"].apply(
+                    lambda value: difflib.SequenceMatcher(None, name_key, value).ratio()
+                )
+                best = scored.sort_values("score", ascending=False).iloc[0]
+                mapped_rows.append(
+                    {
+                        "source_school_id": row.source_school_id,
+                        "SzkolaIdentyfikator": best["SzkolaIdentyfikator"],
+                        "PzoSchoolMatchStatus": "same_address",
+                        "PzoSchoolMatchScore": float(best["score"]),
+                    }
+                )
+                continue
+
+            scored = candidates.copy()
+            scored["name_score"] = scored["name_key"].apply(
+                lambda value: difflib.SequenceMatcher(None, name_key, value).ratio()
+            )
+            scored["addr_score"] = scored["addr_key"].apply(
+                lambda value: difflib.SequenceMatcher(None, address_key, value).ratio()
+            )
+            scored["score"] = scored["name_score"] * 0.65 + scored["addr_score"] * 0.35
+            best = scored.sort_values("score", ascending=False).iloc[0]
+            if float(best["score"]) >= 0.62:
+                mapped_rows.append(
+                    {
+                        "source_school_id": row.source_school_id,
+                        "SzkolaIdentyfikator": best["SzkolaIdentyfikator"],
+                        "PzoSchoolMatchStatus": "name_address_similarity",
+                        "PzoSchoolMatchScore": float(best["score"]),
+                    }
+                )
+            else:
+                mapped_rows.append(
+                    {
+                        "source_school_id": row.source_school_id,
+                        "SzkolaIdentyfikator": normalize_name(row.NazwaSzkoly),
+                        "PzoSchoolMatchStatus": "fallback_name",
+                        "PzoSchoolMatchScore": float(best["score"]),
+                    }
+                )
+
+        mapping = pd.DataFrame(mapped_rows)
+        schools = schools.drop(columns=["SzkolaIdentyfikator"], errors="ignore").merge(
+            mapping, on="source_school_id", how="left"
+        )
+
+    classes = classes.drop(columns=["SzkolaIdentyfikator"], errors="ignore").merge(
+        schools[
+            [
+                "source_school_id",
+                "SzkolaIdentyfikator",
+                "PzoSchoolMatchStatus",
+                "PzoSchoolMatchScore",
+            ]
+        ],
+        on="source_school_id",
+        how="left",
+    )
+    return schools, classes
+
+
+def parse_pointed_subjects(text: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    if not text:
+        return result
+    ordinal_pattern = "|".join(ORDINAL_TO_COLUMN)
+    pattern = re.compile(
+        rf"({ordinal_pattern})\s+punktowany\s+przedmiot\s*:?\s*(.+?)"
+        rf"(?=\s+(?:{ordinal_pattern})\s+punktowany\s+przedmiot|$)",
+        flags=re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        ordinal = ascii_key(match.group(1))
+        column = ORDINAL_TO_COLUMN.get(ordinal)
+        if not column:
+            continue
+        value = safe_text(match.group(2))
+        value = re.sub(r"\s+", " ", value.replace(":", " ")).strip(" ;,.")
+        if value:
+            result[column] = value
+    return result
+
+
+def summarize_criteria(criteria: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "source_class_id",
+        "Punktowany1",
+        "Punktowany2",
+        "Punktowany3",
+        "Punktowany4",
+        "PrzedmiotyPunktowane",
+        "KryteriaPunktowane",
+    ]
+    if criteria.empty or "source_class_id" not in criteria.columns:
+        return pd.DataFrame(columns=columns)
+    rows: list[dict[str, Any]] = []
+    for class_id, group in criteria.groupby("source_class_id", sort=False):
+        texts: list[str] = []
+        for col in ["group_header_text", "display_value_text"]:
+            if col in group.columns:
+                texts.extend(
+                    safe_text(value)
+                    for value in group[col].dropna().tolist()
+                    if safe_text(value)
+                )
+        unique_texts = list(dict.fromkeys(texts))
+        combined = " ".join(unique_texts)
+        pointed = parse_pointed_subjects(combined)
+        subjects = [
+            pointed.get(col, "")
+            for col in ["Punktowany1", "Punktowany2", "Punktowany3", "Punktowany4"]
+            if pointed.get(col)
+        ]
+        rows.append(
+            {
+                "source_class_id": class_id,
+                "Punktowany1": pointed.get("Punktowany1", ""),
+                "Punktowany2": pointed.get("Punktowany2", ""),
+                "Punktowany3": pointed.get("Punktowany3", ""),
+                "Punktowany4": pointed.get("Punktowany4", ""),
+                "PrzedmiotyPunktowane": ", ".join(subjects),
+                "KryteriaPunktowane": "; ".join(unique_texts),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def prepare_threshold_features(df_thresholds: pd.DataFrame) -> pd.DataFrame:
+    thresholds = df_thresholds.copy()
+    if thresholds.empty:
+        return thresholds
+    if "SymbolOddzialu" not in thresholds.columns:
+        thresholds["SymbolOddzialu"] = ""
+    thresholds["match_code"] = thresholds.apply(
+        lambda row: extract_class_code(
+            row.get("OddzialNazwa"), row.get("SymbolOddzialu")
+        ),
+        axis=1,
+    )
+    thresholds["match_type"] = thresholds.apply(
+        lambda row: class_type_token(row.get("OddzialNazwa")), axis=1
+    )
+    thresholds["match_subjects"] = thresholds.apply(class_subject_tokens, axis=1)
+    thresholds["match_languages"] = thresholds.apply(class_language_tokens, axis=1)
+    thresholds["match_name_key"] = thresholds["OddzialNazwa"].apply(ascii_key)
+    return thresholds
+
+
+def prepare_current_class_features(df_classes: pd.DataFrame) -> pd.DataFrame:
+    classes = df_classes.copy()
+    if classes.empty:
+        return classes
+    if "OddzialKod" not in classes.columns:
+        classes["OddzialKod"] = ""
+    classes["match_code"] = classes.apply(
+        lambda row: extract_class_code(row.get("OddzialNazwa"), row.get("OddzialKod")),
+        axis=1,
+    )
+    classes["match_type"] = classes.apply(
+        lambda row: class_type_token(row.get("OddzialNazwa"), row.get("TypOddzialu")),
+        axis=1,
+    )
+    classes["match_subjects"] = classes.apply(class_subject_tokens, axis=1)
+    classes["match_languages"] = classes.apply(class_language_tokens, axis=1)
+    classes["match_name_key"] = classes["OddzialNazwa"].apply(ascii_key)
+    return classes
+
+
+def threshold_match_status(
+    score: float,
+    gap: float,
+    code_score: float,
+    profile_score: float,
+    language_score: float,
+    type_score: float,
+    threshold_value: Any,
+) -> str:
+    if pd.isna(threshold_value):
+        return "candidate_only"
+    profile_is_strong = profile_score >= 0.99
+    profile_is_close = profile_score >= 0.66
+    language_is_compatible = language_score >= 0.66
+    language_has_overlap = language_score > 0
+    type_is_compatible = type_score >= 1.0
+    if (
+        score >= 0.86
+        and code_score >= 0.9
+        and profile_is_strong
+        and language_is_compatible
+        and type_is_compatible
+    ):
+        return "trusted"
+    if (
+        score >= 0.72
+        and profile_is_strong
+        and language_is_compatible
+        and type_is_compatible
+        and gap >= 0.03
+    ):
+        return "approximate"
+    if (
+        score >= 0.74
+        and profile_is_strong
+        and language_has_overlap
+        and type_is_compatible
+        and gap >= 0.03
+    ):
+        return "approximate"
+    if score >= 0.72 and code_score >= 0.75 and profile_is_close:
+        return "approximate"
+    return "candidate_only"
+
+
+def match_reference_thresholds(
+    df_classes: pd.DataFrame,
+    df_thresholds: pd.DataFrame,
+    max_candidates_per_class: int = 5,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    match_columns = [
+        "source_school_id",
+        "source_class_id",
+        "SzkolaIdentyfikator",
+        "OddzialNazwa",
+        "threshold_year",
+        "threshold_label",
+        "threshold_kind",
+        "threshold_priority",
+        "OldOddzialNazwa",
+        "OldSymbolOddzialu",
+        "Prog_min_klasa",
+        "match_score",
+        "match_gap",
+        "match_status",
+        "match_method",
+        "used_for_scoring",
+        "candidate_rank",
+    ]
+    if df_classes.empty or df_thresholds.empty:
+        return pd.DataFrame(columns=match_columns), pd.DataFrame()
+
+    thresholds = df_thresholds.copy()
+    thresholds["threshold_priority"] = pd.to_numeric(
+        thresholds["threshold_priority"], errors="coerce"
+    ).fillna(999)
+    active_priority = thresholds.groupby("SzkolaIdentyfikator")[
+        "threshold_priority"
+    ].transform("min")
+    thresholds = thresholds[thresholds["threshold_priority"].eq(active_priority)]
+    thresholds = prepare_threshold_features(thresholds)
+    classes = prepare_current_class_features(df_classes)
+
+    rows = []
+    for _, class_row in classes.iterrows():
+        school_id = class_row.get("SzkolaIdentyfikator")
+        if not safe_text(school_id):
+            continue
+        pool = thresholds[thresholds["SzkolaIdentyfikator"].eq(school_id)]
+        scored = []
+        for _, threshold_row in pool.iterrows():
+            code_score, code_method = class_code_similarity(
+                class_row.get("match_code"), threshold_row.get("match_code")
+            )
+            profile_score = jaccard_score(
+                class_row.get("match_subjects", ()),
+                threshold_row.get("match_subjects", ()),
+            )
+            language_score = jaccard_score(
+                class_row.get("match_languages", ()),
+                threshold_row.get("match_languages", ()),
+            )
+            type_score = (
+                1.0
+                if safe_text(class_row.get("match_type"))
+                and class_row.get("match_type") == threshold_row.get("match_type")
+                else 0.0
+            )
+            name_score = difflib.SequenceMatcher(
+                None,
+                safe_text(class_row.get("match_name_key")),
+                safe_text(threshold_row.get("match_name_key")),
+            ).ratio()
+            score = (
+                0.20 * code_score
+                + 0.50 * profile_score
+                + 0.15 * language_score
+                + 0.10 * type_score
+                + 0.05 * name_score
+            )
+            methods = [
+                method
+                for method, active in [
+                    (code_method, bool(code_method)),
+                    ("profile_exact", profile_score >= 0.99),
+                    ("profile_partial", 0.66 <= profile_score < 0.99),
+                    ("language_exact", language_score >= 0.99),
+                    ("language_partial", 0 < language_score < 0.99),
+                    ("type", type_score >= 1.0),
+                ]
+                if active
+            ]
+            scored.append(
+                {
+                    "source_school_id": class_row.get("source_school_id"),
+                    "source_class_id": class_row.get("source_class_id"),
+                    "SzkolaIdentyfikator": school_id,
+                    "OddzialNazwa": class_row.get("OddzialNazwa"),
+                    "threshold_year": threshold_row.get("threshold_year"),
+                    "threshold_label": threshold_row.get("threshold_label"),
+                    "threshold_kind": threshold_row.get("threshold_kind"),
+                    "threshold_priority": threshold_row.get("threshold_priority"),
+                    "OldOddzialNazwa": threshold_row.get("OddzialNazwa"),
+                    "OldSymbolOddzialu": threshold_row.get("SymbolOddzialu"),
+                    "Prog_min_klasa": threshold_row.get("Prog_min_klasa"),
+                    "match_score": round(score, 4),
+                    "code_score": code_score,
+                    "profile_score": profile_score,
+                    "language_score": language_score,
+                    "type_score": type_score,
+                    "match_method": ";".join(methods),
+                }
+            )
+        if not scored:
+            continue
+        scored = sorted(
+            scored,
+            key=lambda item: (
+                item["match_score"],
+                item["profile_score"],
+                item["language_score"],
+                item["code_score"],
+                -int(item.get("threshold_priority") or 999),
+            ),
+            reverse=True,
+        )
+        runner_score = scored[1]["match_score"] if len(scored) > 1 else 0.0
+        for rank, item in enumerate(scored[:max_candidates_per_class], start=1):
+            gap = float(item["match_score"]) - float(runner_score) if rank == 1 else 0.0
+            item["match_gap"] = round(gap, 4)
+            item["match_status"] = threshold_match_status(
+                float(item["match_score"]),
+                gap,
+                float(item.pop("code_score")),
+                float(item.pop("profile_score")),
+                float(item.pop("language_score")),
+                float(item.pop("type_score")),
+                item.get("Prog_min_klasa"),
+            )
+            item["candidate_rank"] = rank
+            item["used_for_scoring"] = rank == 1 and item["match_status"] in {
+                "trusted",
+                "approximate",
+            }
+            rows.append(item)
+
+    matches = pd.DataFrame(rows, columns=match_columns)
+    selected = matches[matches["used_for_scoring"].eq(True)].copy()
+    return matches, selected
+
+
+def apply_threshold_matches(
+    df_classes: pd.DataFrame, threshold_matches: pd.DataFrame
+) -> pd.DataFrame:
+    classes = df_classes.copy()
+    classes["Prog_min_klasa"] = pd.NA
+    classes["ProgMatchStatus"] = "school_only"
+    classes["ProgMatchScore"] = pd.NA
+    classes["ProgMatchMethod"] = ""
+    classes["ProgMatchOldClass"] = ""
+    classes["ProgMatchLabel"] = ""
+    classes["ProgCandidatesCount"] = 0
+    classes["ProgCandidatesSummary"] = ""
+
+    if threshold_matches.empty:
+        return classes
+
+    counts = (
+        threshold_matches.groupby("source_class_id")
+        .size()
+        .rename("ProgCandidatesCount")
+        .reset_index()
+    )
+    summary_rows = []
+    for class_id, group in threshold_matches.sort_values(
+        ["source_class_id", "candidate_rank"]
+    ).groupby("source_class_id", sort=False):
+        summary = "; ".join(
+            f"{int(row.threshold_year)} {row.OldOddzialNazwa}: "
+            f"{format_threshold_value(row.Prog_min_klasa)}"
+            for row in group.head(3).itertuples(index=False)
+            if pd.notna(row.Prog_min_klasa)
+        )
+        summary_rows.append(
+            {"source_class_id": class_id, "ProgCandidatesSummary": summary}
+        )
+    candidate_summary = pd.DataFrame(summary_rows)
+    classes = classes.merge(
+        counts, on="source_class_id", how="left", suffixes=("", "_m")
+    )
+    classes["ProgCandidatesCount"] = classes["ProgCandidatesCount_m"].combine_first(
+        classes["ProgCandidatesCount"]
+    )
+    classes = classes.drop(columns=["ProgCandidatesCount_m"], errors="ignore")
+    classes = classes.merge(
+        candidate_summary, on="source_class_id", how="left", suffixes=("", "_m")
+    )
+    classes["ProgCandidatesSummary"] = classes["ProgCandidatesSummary_m"].combine_first(
+        classes["ProgCandidatesSummary"]
+    )
+    classes = classes.drop(columns=["ProgCandidatesSummary_m"], errors="ignore")
+
+    selected = threshold_matches[threshold_matches["used_for_scoring"].eq(True)].copy()
+    if selected.empty:
+        return classes
+    selected = selected[
+        [
+            "source_class_id",
+            "Prog_min_klasa",
+            "threshold_year",
+            "threshold_kind",
+            "threshold_label",
+            "match_status",
+            "match_score",
+            "match_method",
+            "OldOddzialNazwa",
+        ]
+    ].rename(
+        columns={
+            "match_status": "ProgMatchStatus",
+            "match_score": "ProgMatchScore",
+            "match_method": "ProgMatchMethod",
+            "OldOddzialNazwa": "ProgMatchOldClass",
+            "threshold_label": "ProgMatchLabel",
+        }
+    )
+    classes = classes.drop(
+        columns=[
+            "Prog_min_klasa",
+            "threshold_year",
+            "threshold_kind",
+            "threshold_label",
+            "ProgMatchStatus",
+            "ProgMatchScore",
+            "ProgMatchMethod",
+            "ProgMatchOldClass",
+            "ProgMatchLabel",
+        ],
+        errors="ignore",
+    ).merge(selected, on="source_class_id", how="left")
+    classes["ProgMatchStatus"] = classes["ProgMatchStatus"].fillna("school_only")
+    classes["ProgMatchMethod"] = classes["ProgMatchMethod"].fillna("")
+    classes["ProgMatchOldClass"] = classes["ProgMatchOldClass"].fillna("")
+    classes["ProgMatchLabel"] = classes["ProgMatchLabel"].fillna("")
+    return classes
+
+
+def add_threshold_usage_labels(df_classes: pd.DataFrame) -> pd.DataFrame:
+    classes = df_classes.copy()
+    classes["ProgUsedLevel"] = "brak progu"
+    trusted = (
+        classes["ProgMatchStatus"].eq("trusted") & classes["Prog_min_klasa"].notna()
+    )
+    approximate = (
+        classes["ProgMatchStatus"].eq("approximate") & classes["Prog_min_klasa"].notna()
+    )
+    school_only = classes["Prog_min_klasa"].isna() & classes["Prog_min_szkola"].notna()
+    class_years = (
+        classes["threshold_year"]
+        if "threshold_year" in classes.columns
+        else pd.Series(pd.NA, index=classes.index)
+    )
+    school_years = (
+        classes["Prog_szkola_threshold_year"]
+        if "Prog_szkola_threshold_year" in classes.columns
+        else pd.Series(pd.NA, index=classes.index)
+    )
+    classes.loc[trusted, "ProgUsedLevel"] = class_years[trusted].apply(
+        lambda value: (
+            f"klasowy {format_threshold_year(value)} - dokładny"
+            if format_threshold_year(value)
+            else "klasowy - dokładny"
+        )
+    )
+    classes.loc[approximate, "ProgUsedLevel"] = class_years[approximate].apply(
+        lambda value: (
+            f"klasowy {format_threshold_year(value)} - przybliżony"
+            if format_threshold_year(value)
+            else "klasowy - przybliżony"
+        )
+    )
+    classes.loc[school_only, "ProgUsedLevel"] = school_years[school_only].apply(
+        lambda value: (
+            f"szkolny {format_threshold_year(value)} - brak dopasowania klasy"
+            if format_threshold_year(value)
+            else "szkolny - brak dopasowania klasy"
+        )
+    )
+    return classes
+
+
+def build_school_details(df_schools: pd.DataFrame) -> pd.DataFrame:
+    if df_schools.empty:
+        return pd.DataFrame()
+    details = df_schools.copy()
+    details["OpisSzkolyMarkdown"] = (
+        details["OpisSzkolyText"].fillna("")
+        if "OpisSzkolyText" in details.columns
+        else ""
+    )
+    details["OpisSzkolyPreview"] = details["OpisSzkolyMarkdown"].apply(preview_text)
+    columns = [
+        "source_school_id",
+        "SzkolaIdentyfikator",
+        "NazwaSzkoly",
+        "AdresSzkoly",
+        "Dzielnica",
+        "Telefon",
+        "Email",
+        "WWW",
+        "OfertaPzoUrl",
+        "OpisSzkolyPreview",
+        "OpisSzkolyMarkdown",
+        "year",
+        "admission_year",
+        "school_year",
+    ]
+    return details[[col for col in columns if col in details.columns]].copy()
+
+
+def build_class_details(
+    df_classes: pd.DataFrame, criteria_summary: pd.DataFrame
+) -> pd.DataFrame:
+    if df_classes.empty:
+        return pd.DataFrame()
+    details = df_classes.copy()
+    if not criteria_summary.empty:
+        details = details.merge(criteria_summary, on="source_class_id", how="left")
+    details["OpisOddzialuMarkdown"] = (
+        details["OpisOddzialuText"].fillna("")
+        if "OpisOddzialuText" in details.columns
+        else ""
+    )
+    details["OpisOddzialuPreview"] = details["OpisOddzialuMarkdown"].apply(
+        lambda value: preview_text(value, limit=450)
+    )
+    columns = [
+        "source_class_id",
+        "source_school_id",
+        "SzkolaIdentyfikator",
+        "NazwaSzkoly",
+        "OddzialNazwa",
+        "OddzialKod",
+        "TypOddzialu",
+        "LiczbaMiejsc",
+        "LiczbaOddzialow",
+        "PierwszyJezykObcy",
+        "DrugiJezykObcy",
+        "JezykiObce",
+        "JezykiObceIkonyOpis",
+        "PrzedmiotyRozszerzone",
+        "Zawod",
+        "DyscyplinaSportowa",
+        "Punktowany1",
+        "Punktowany2",
+        "Punktowany3",
+        "Punktowany4",
+        "PrzedmiotyPunktowane",
+        "KryteriaPunktowane",
+        "OpisOddzialuPreview",
+        "OpisOddzialuMarkdown",
+        "Prog_min_klasa",
+        "Prog_min_szkola",
+        "ProgMatchStatus",
+        "ProgMatchScore",
+        "ProgMatchMethod",
+        "ProgMatchOldClass",
+        "ProgCandidatesSummary",
+        "ProgUsedLevel",
+        "WWW",
+        "OfertaPzoUrl",
+        "year",
+        "admission_year",
+        "school_year",
+    ]
+    return details[[col for col in columns if col in details.columns]].copy()
+
+
+def attach_pzo_cached_travel_time(
+    df_schools: pd.DataFrame, location_cache: pd.DataFrame
+) -> pd.DataFrame:
+    schools = df_schools.copy()
+    if location_cache.empty or "SzkolaIdentyfikator" not in location_cache.columns:
+        schools["CzasDojazdu"] = None
+        return schools
+    cols = [
+        col
+        for col in ["SzkolaIdentyfikator", "CzasDojazdu"]
+        if col in location_cache.columns
+    ]
+    if len(cols) == 2:
+        schools = schools.drop(columns=["CzasDojazdu"], errors="ignore").merge(
+            location_cache[cols]
+            .dropna(subset=["SzkolaIdentyfikator"])
+            .drop_duplicates("SzkolaIdentyfikator"),
+            on="SzkolaIdentyfikator",
+            how="left",
+        )
+    if "CzasDojazdu" not in schools.columns:
+        schools["CzasDojazdu"] = None
+    return schools
+
+
 def build_vulcan_year(
     year_cfg: dict[str, Any], cfg: dict[str, Any], location_cache: pd.DataFrame
 ) -> dict[str, pd.DataFrame]:
@@ -841,14 +1864,7 @@ def build_vulcan_year(
 
     threshold_info = threshold_meta(year_cfg)
     for df in [df_schools, df_classes, df_thresholds, df_ranking]:
-        df["year"] = year_cfg["year"]
-        df["admission_year"] = year_cfg.get("admission_year")
-        df["school_year"] = year_cfg.get("school_year")
-        df["data_status"] = year_cfg.get("data_status")
-        df["status_label"] = year_cfg.get("status_label")
-        df["threshold_mode"] = threshold_info["threshold_mode"]
-        df["threshold_label"] = threshold_info["threshold_label"]
-        df["threshold_years"] = threshold_info["threshold_years"]
+        add_year_metadata(df, year_cfg, threshold_info)
 
     return {
         "schools": df_schools,
@@ -870,6 +1886,135 @@ def _append_duplicate_suffix(df: pd.DataFrame) -> pd.DataFrame:
         df.loc[mask, "OddzialNazwa"] + " #" + (duplicate_no[mask] + 1).astype(str)
     )
     return df
+
+
+def build_pzo_year(
+    year_cfg: dict[str, Any], cfg: dict[str, Any], location_cache: pd.DataFrame
+) -> dict[str, pd.DataFrame]:
+    _ = cfg
+    pzo_tables = load_pzo_offer_tables(year_cfg)
+    df_schools = pzo_tables.get("schools", pd.DataFrame()).copy()
+    df_classes = pzo_tables.get("classes", pd.DataFrame()).copy()
+    criteria_long = pzo_tables.get("criteria_long", pd.DataFrame()).copy()
+    if df_schools.empty or df_classes.empty:
+        raise ValueError("Snapshot PZO nie zawiera wymaganych tabel schools/classes.")
+
+    df_thresholds = load_thresholds(year_cfg)
+    df_ranking = load_ranking(year_cfg)
+
+    reference_schools = reference_schools_from_cache(location_cache)
+    df_schools, df_classes = attach_stable_school_ids(
+        df_schools, df_classes, reference_schools
+    )
+
+    df_schools["OfertaPzoUrl"] = df_schools["pzo_school_type_ids"].apply(pzo_search_url)
+    df_schools["url"] = (
+        df_schools.get("WWW", pd.Series(index=df_schools.index, dtype=object))
+        .replace("", pd.NA)
+        .combine_first(df_schools["OfertaPzoUrl"])
+    )
+    df_schools["OpisSzkolyPreview"] = (
+        df_schools["OpisSzkolyText"].fillna("").apply(preview_text)
+        if "OpisSzkolyText" in df_schools.columns
+        else ""
+    )
+    df_schools = attach_pzo_cached_travel_time(df_schools, location_cache)
+
+    ranking_cols = ["SzkolaIdentyfikator", "RankingPoz", "RankingPozTekst"]
+    if not df_ranking.empty and set(ranking_cols).issubset(df_ranking.columns):
+        df_schools = df_schools.merge(df_ranking[ranking_cols], how="left")
+
+    threshold_matches, _ = match_reference_thresholds(df_classes, df_thresholds)
+    df_classes = apply_threshold_matches(df_classes, threshold_matches)
+
+    minmax = school_threshold_summary(df_thresholds)
+    historical_thresholds = historical_school_thresholds(df_thresholds)
+    df_schools = df_schools.merge(minmax, how="left", on="SzkolaIdentyfikator")
+    df_schools = df_schools.merge(
+        historical_thresholds, how="left", on="SzkolaIdentyfikator"
+    )
+
+    school_metric_cols = [
+        "source_school_id",
+        "SzkolaIdentyfikator",
+        "CzasDojazdu",
+        "SzkolaLat",
+        "SzkolaLon",
+        "Prog_min_szkola",
+        "Prog_max_szkola",
+        "Prog_szkola_threshold_year",
+        "Prog_szkola_threshold_kind",
+        "Prog_szkola_threshold_label",
+        "Progi_historyczne_szkola",
+        "Progi_historyczne_lata",
+        "RankingPoz",
+        "RankingPozTekst",
+        "WWW",
+        "OfertaPzoUrl",
+        "url",
+    ]
+    school_metric_keys = ["source_school_id", "SzkolaIdentyfikator"]
+    df_classes = df_classes.drop(
+        columns=[
+            col
+            for col in school_metric_cols
+            if col not in school_metric_keys and col in df_classes.columns
+        ],
+        errors="ignore",
+    )
+    df_classes = df_classes.merge(
+        df_schools[
+            [col for col in school_metric_cols if col in df_schools.columns]
+        ].drop_duplicates("source_school_id"),
+        how="left",
+        on=school_metric_keys,
+    )
+    df_classes = add_threshold_usage_labels(df_classes)
+    df_classes = add_common_class_columns(df_classes)
+
+    criteria_summary = summarize_criteria(criteria_long)
+    threshold_info = threshold_meta(year_cfg)
+    frames_for_meta = [
+        df_schools,
+        df_classes,
+        df_thresholds,
+        df_ranking,
+        threshold_matches,
+    ]
+    for df in frames_for_meta:
+        if df.empty:
+            continue
+        add_year_metadata(df, year_cfg, threshold_info)
+
+    school_details = build_school_details(df_schools)
+    class_details = build_class_details(df_classes, criteria_summary)
+
+    school_drop_cols = ["Dyrektor", "OpisSzkolyHtml", "OpisSzkolyText"]
+    class_drop_cols = [
+        "OpisOddzialuHtml",
+        "OpisOddzialuText",
+        "QualificationGroup",
+        "QualificationGroupId",
+        "ModuleId",
+        "BlockApply",
+        "HasCriteria",
+        "ShowCriteria",
+        "latitude",
+        "longitude",
+    ]
+    df_schools = df_schools.drop(columns=school_drop_cols, errors="ignore")
+    df_classes = df_classes.drop(columns=class_drop_cols, errors="ignore")
+
+    return {
+        "schools": df_schools,
+        "classes": df_classes,
+        "thresholds": df_thresholds,
+        "ranking": df_ranking,
+        "plan": pd.DataFrame(),
+        "school_details": school_details,
+        "class_details": class_details,
+        "threshold_matches": threshold_matches,
+    }
 
 
 def build_plan_year(
@@ -991,14 +2136,7 @@ def build_plan_year(
 
     threshold_info = threshold_meta(year_cfg)
     for df in [df_schools, df_classes, df_thresholds, df_ranking, df_plan]:
-        df["year"] = year_cfg["year"]
-        df["admission_year"] = year_cfg.get("admission_year")
-        df["school_year"] = year_cfg.get("school_year")
-        df["data_status"] = year_cfg.get("data_status")
-        df["status_label"] = year_cfg.get("status_label")
-        df["threshold_mode"] = threshold_info["threshold_mode"]
-        df["threshold_label"] = threshold_info["threshold_label"]
-        df["threshold_years"] = threshold_info["threshold_years"]
+        add_year_metadata(df, year_cfg, threshold_info)
 
     return {
         "schools": df_schools,
@@ -1015,6 +2153,8 @@ def process_year(
     offer_type = year_cfg["offer"]["type"]
     if offer_type == "vulcan_legacy":
         return build_vulcan_year(year_cfg, cfg, location_cache)
+    if offer_type == "pzo_omikron":
+        return build_pzo_year(year_cfg, cfg, location_cache)
     if offer_type == "plan_naboru":
         return build_plan_year(year_cfg, cfg, location_cache)
     raise ValueError(f"Nieznany typ oferty: {offer_type}")
@@ -1107,7 +2247,11 @@ def export_app_workbook(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     def concat(name: str) -> pd.DataFrame:
-        frames = [dataset[name] for dataset in datasets if not dataset[name].empty]
+        frames = [
+            dataset.get(name, pd.DataFrame())
+            for dataset in datasets
+            if not dataset.get(name, pd.DataFrame()).empty
+        ]
         clean_frames = [frame.dropna(axis=1, how="all") for frame in frames]
         clean_frames = [frame for frame in clean_frames if not frame.empty]
         return (
@@ -1124,6 +2268,9 @@ def export_app_workbook(
         "rankings": concat("ranking"),
         "thresholds": concat("thresholds"),
         "plan_naboru": concat("plan"),
+        "school_details": concat("school_details"),
+        "class_details": concat("class_details"),
+        "threshold_matches": concat("threshold_matches"),
     }
     if replace_years:
         sheets = merge_existing_year_sheets(

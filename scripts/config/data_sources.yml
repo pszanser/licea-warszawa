@@ -1,4 +1,4 @@
-default_year: 2025
+default_year: 2026
 app_data_file: results/app/licea_warszawa.xlsx
 
 years:
@@ -40,14 +40,14 @@ years:
     year: 2026
     admission_year: 2026
     school_year: "2026/2027"
-    data_status: planned_offer
-    status_label: "plan naboru bez szczegółowej oferty"
+    data_status: official_offer
+    status_label: "oficjalna oferta 2026/2027"
     threshold_mode: reference
-    threshold_label: "progi referencyjne 2025/2024"
+    threshold_label: "progi referencyjne 2025"
     offer:
-      type: plan_naboru
-      path: data/raw/2026/plan_naboru_2026_2027.xlsx
-      source_url: "https://edukacja.um.warszawa.pl/documents/66399/153518577/Plan+naboru+16.04.26.xlsx/f1ff71bd-0096-9b96-995b-364a60347222?t=1776666824947"
+      type: pzo_omikron
+      path: data/raw/2026/pzo_omikron_2026_2027
+      source_url: "https://rekrutacje-warszawa.pzo.edu.pl/omikron-public/offer/search"
     thresholds:
       sources:
         - type: minimum_points
