@@ -44,8 +44,8 @@ Zapytaj Devina o to repozytorium:
 ├── data/                 # Katalog na pliki wejściowe
 │   ├── raw/              # Surowe źródła według roku danych
 │   │   ├── 2024/         # Historyczne progi punktowe
-│   │   ├── 2025/         # Ranking i progi dla danych 2025
-│   │   └── 2026/         # Ranking i plan naboru dla danych 2026
+│   │   ├── 2025/         # Ranking, oferta Vulcan i progi dla danych 2025
+│   │   └── 2026/         # Ranking i lokalny snapshot oficjalnej oferty PZO 2026
 │   └── reference/        # Słowniki pomocnicze niezależne od roku danych
 │       └── waw_kod_dzielnica.csv
 ├── gpts/                 # Pliki związane z GPTs 
@@ -70,6 +70,7 @@ Zapytaj Devina o to repozytorium:
 │   │   ├── __init__.py
 │   │   ├── get_data_kod_dzielnica.py
 │   │   ├── get_data_vulcan_async.py
+│   │   ├── get_data_pzo_omikron.py
 │   │   ├── load_minimum_points.py
 │   │   └── parser_perspektywy.py
 │   ├── tests/                # Starsze testy przy skryptach
@@ -92,23 +93,32 @@ Projekt buduje teraz jeden stabilny plik aplikacyjny:
 results/app/licea_warszawa.xlsx
 ```
 
-Plik zawiera arkusze `metadata`, `quality`, `schools`, `classes`, `rankings`, `thresholds` i `plan_naboru`. Kluczowe kolumny roczne to:
+Plik zawiera arkusze `metadata`, `quality`, `schools`, `classes`, `rankings`,
+`thresholds`, `plan_naboru`, `school_details`, `class_details` i
+`threshold_matches`. Kluczowe kolumny roczne to:
 
 *   `year` - rok danych prezentowanych w aplikacji, np. `2026`.
 *   `admission_year` - rok rekrutacji/oferty, np. `2026`.
 *   `school_year` - rok szkolny, np. `2026/2027`.
 *   `source_school_id` - trwały identyfikator szkoły z konkretnego źródła danych.
-*   `data_status` / `status_label` - informacja, czy dane są pełne, czy planistyczne.
+*   `data_status` / `status_label` - informacja, czy dane są pełne, czy są oficjalną ofertą na kolejny rok.
 *   `threshold_year` - rok źródłowy progu punktowego, np. `2025` albo `2024`.
 *   `threshold_mode` / `threshold_label` - informacja, czy progi są faktyczne dla danego roku, czy referencyjne.
 *   `Progi_historyczne_szkola` - lista znanych przedziałów progów szkoły według lat progów, pokazywana w szczegółach szkoły.
 *   `RankingPoz` / `RankingRok` - najnowszy znany ranking Perspektyw używany przez filtry i wykresy.
 *   `Ranking_historyczny_szkola` - lista znanych pozycji rankingowych szkoły według lat, pokazywana w szczegółach szkoły.
+*   `source_class_id` - trwały identyfikator klasy/oddziału z konkretnego źródła danych.
+*   `ProgUsedLevel` - opis, czy próg w aplikacji jest dokładnym/przybliżonym dopasowaniem klasy 2025, czy fallbackiem szkolnym.
 
 Źródła dla kolejnych lat są opisane w `scripts/config/data_sources.yml`. Obecnie:
 
 *   `2025` używa pełnej oferty Vulcan, rankingu Perspektyw 2025 i faktycznych progów 2025 jako aktywnego źródła. Progi 2024 są zachowane jako historia/fallback.
-*   `2026` używa rankingu Perspektyw 2026, planu naboru 2026/2027 oraz progów referencyjnych 2025/2024. To są dane planistyczne do czasu publikacji szczegółowej oferty klas i progów 2026.
+*   `2026` używa oficjalnej publicznej oferty PZO/Omikron 2026/2027, rankingu Perspektyw 2026 oraz progów referencyjnych 2025/2024. Progi dla klas 2026 są dopasowywane do historycznych klas 2025, a przy braku mocnego dopasowania aplikacja pokazuje fallback do progu szkoły.
+
+Surowy snapshot PZO (`data/raw/2026/pzo_omikron_2026_2027/`) oraz robocze pliki
+pośrednie są lokalnymi artefaktami odtwarzalnymi z publicznego API i nie są
+przeznaczone do commitowania. Do repozytorium trafia finalny plik aplikacji
+`results/app/licea_warszawa.xlsx`.
 
 Pipeline można uruchomić dla wszystkich lat albo dla jednego roku:
 
@@ -178,10 +188,11 @@ python scripts/main.py --year 2026
 ## Główne funkcjonalności
 
 ### Przetwarzanie danych
-*   **Pobieranie danych:** Automatyczne pobieranie danych o szkołach z systemu Vulcan
+*   **Pobieranie danych:** Automatyczne pobieranie danych o szkołach z systemu Vulcan dla 2025 oraz oficjalnej oferty PZO/Omikron dla 2026
 *   **Parsowanie rankingu Perspektyw:** Ekstrakcja danych z HTML/JS rankingu, z fallbackiem do PDF
 *   **Wczytywanie progów punktowych:** Integracja z historycznymi danymi o progach w różnych formatach Excela
-*   **Plan naboru:** Wczytywanie planu naboru 2026/2027 jako danych planistycznych
+*   **Oficjalna oferta 2026:** Wczytywanie publicznej oferty PZO/Omikron, w tym adresów, współrzędnych, kontaktów, opisów szkół i klas, języków, rozszerzeń oraz kryteriów punktowanych
+*   **Plan naboru:** Obsługa planu naboru pozostaje dostępna jako starszy typ źródła danych
 *   **Obliczanie czasów dojazdu:** Precyzyjne geokodowanie i kalkulacja czasu podróży przez Google Maps API
 *   **Scoring:** Opcjonalny złożony wskaźnik oceny szkół
 
@@ -199,6 +210,7 @@ Zaawansowana aplikacja webowa z:
 *   **Personalizowanym dopasowaniem (FitScore):** ważony scoring szkół po rankingu, marginesie do progu i odległości od punktu startowego (klik na mapie / środek widoku / adres z geokodowania Google). Jeśli dla ważonej składowej brakuje danych, np. rankingu albo progu, składowa liczy się jako `0` i jest pokazana w kolumnie **Braki danych**.
 *   **Punktem startowym do porównań:** klik na mapie zapamiętuje pinezkę, środek widoku pozwala szybko użyć aktualnego kadru mapy, a adres można zgeokodować przez Google Maps API
 *   **Linkami do rzeczywistego dojazdu:** popupy szkół i wyniki dopasowania mogą otworzyć gotową trasę komunikacją miejską z wybranego punktu startowego
+*   **Szczegółami oferty 2026:** po wyborze szkoły na mapie aplikacja pokazuje pod mapą panel z ofertą 2026, opisem placówki, klasami 2025 z progami oraz szczegółami wybranej klasy
 *   **Metrykami podsumowującymi:** liczba szkół/klas, średni próg
 *   **Eksportem do Excel** przefiltrowanych danych oraz wyników dopasowania
 *   **Expandowaną listą szkół** z kluczowymi statystykami

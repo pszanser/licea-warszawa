@@ -3,7 +3,7 @@
 **Cel tego dokumentu:** Ten plik (`AGENTS.md`) służy jako Twój główny przewodnik do pracy w tym repozytorium. Zawiera kluczowe informacje o strukturze projektu, konfiguracji środowiska, standardach kodowania, testowaniu i sposobie prezentowania wyników Twojej pracy. Przestrzegaj go uważnie, aby Twoje zmiany były spójne i wysokiej jakości.
 
 ## Przegląd Projektu
-Ten projekt analizuje licea, technika i szkoły branżowe w Warszawie i okolicach. Integruje dane z systemu Vulcan, ranking Perspektyw, progi punktowe oraz czasy dojazdu z Google Maps API. Głównym produktem jest interaktywna aplikacja Streamlit z mapą i wizualizacjami.
+Ten projekt analizuje licea, technika i szkoły branżowe w Warszawie i okolicach. Integruje dane z systemu Vulcan dla historycznych danych 2025, oficjalną publiczną ofertę PZO/Omikron dla 2026, ranking Perspektyw, progi punktowe oraz czasy dojazdu z Google Maps API. Głównym produktem jest interaktywna aplikacja Streamlit z mapą i wizualizacjami.
 **Twoim nadrzędnym celem jest pomoc w rozwijaniu i utrzymaniu tego projektu, mając na uwadze jego końcowych użytkowników: rodziców i uczniów wybierających szkołę.**
 
 ## Zasady Pracy Agenta
@@ -172,6 +172,7 @@ Upewnij się, że wszystkie powyższe kroki zostały wykonane i zakończyły si�
 
 ### Źródła danych:
 - **Vulcan API** - dane o szkołach (asynchroniczne pobieranie)
+- **PZO/Omikron** - oficjalna publiczna oferta 2026/2027, szczegóły szkół i klas
 - **PDF Perspektyw** - ranking szkół (parsing PDF)
 - **Excel z progami** - historyczne progi punktowe
 - **Google Maps API** - geokodowanie i czasy dojazdu

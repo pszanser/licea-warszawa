@@ -18,6 +18,12 @@ Krótka historia zmian w aplikacji. Najnowsze wpisy są na górze.
 - Progi dla klas 2026 są dopasowywane do historycznych klas 2025, a gdy nie ma
   dobrego dopasowania, aplikacja jasno pokazuje odniesienie do progu szkolnego.
 
+### Poprawki
+
+- Stabilniejsze wybieranie szkoły z mapy, także gdy kilka szkół ma te same
+  współrzędne lub różne identyfikatory źródłowe.
+- Bezpieczniejsze generowanie dymków mapy na podstawie danych zewnętrznych.
+
 ## 2026-04-29 - Dopasowanie szkół
 
 ### Nowe
