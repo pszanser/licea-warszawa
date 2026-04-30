@@ -70,7 +70,7 @@ def get_available_years(excel_path: Path) -> list[int]:
 
 
 def get_default_year(excel_path: Path, available_years: list[int] | None = None) -> int:
-    """Zwraca najnowszy kompletny rok danych, z fallbackiem na najnowszy dostępny."""
+    """Zwraca domyślny rok aplikacji z preferencją dla oficjalnej oferty."""
     years = available_years or get_available_years(excel_path)
     if not years:
         return 2025
@@ -78,15 +78,220 @@ def get_default_year(excel_path: Path, available_years: list[int] | None = None)
     try:
         metadata = pd.read_excel(excel_path, sheet_name="metadata")
         if {"year", "data_status"}.issubset(metadata.columns):
-            full_years = metadata[metadata["data_status"].eq("full")]["year"].dropna()
-            full_years = [int(year) for year in full_years.unique()]
-            full_years = [year for year in full_years if year in years]
-            if full_years:
-                return max(full_years)
+            preferred_statuses = ["official_offer", "full"]
+            for status in preferred_statuses:
+                preferred_years = metadata[metadata["data_status"].eq(status)][
+                    "year"
+                ].dropna()
+                preferred_years = [int(year) for year in preferred_years.unique()]
+                preferred_years = [year for year in preferred_years if year in years]
+                if preferred_years:
+                    return max(preferred_years)
     except Exception:
         pass
 
     return max(years)
+
+
+def _coerce_map_point(point: Any) -> tuple[float, float] | None:
+    """Normalizuje punkt kliknięcia zwracany przez streamlit-folium."""
+    if point is None:
+        return None
+    if isinstance(point, dict):
+        lat = point.get("lat")
+        lon = point.get("lng", point.get("lon"))
+    elif isinstance(point, (tuple, list)) and len(point) >= 2:
+        lat = point[0]
+        lon = point[1]
+    else:
+        return None
+    if lat is None or lon is None:
+        return None
+    try:
+        return float(lat), float(lon)
+    except (TypeError, ValueError):
+        return None
+
+
+def find_school_by_map_point(
+    df_schools: pd.DataFrame,
+    point: Any,
+    max_distance_degrees: float = 0.0008,
+) -> str | None:
+    """Zwraca identyfikator szkoły najbliższej klikniętemu znacznikowi mapy."""
+    if df_schools.empty or {"SzkolaLat", "SzkolaLon"}.difference(df_schools.columns):
+        return None
+
+    lat_lon = _coerce_map_point(point)
+    if lat_lon is None:
+        return None
+    lat, lon = lat_lon
+
+    school_lat = pd.to_numeric(df_schools["SzkolaLat"], errors="coerce")
+    school_lon = pd.to_numeric(df_schools["SzkolaLon"], errors="coerce")
+    distance_sq = (school_lat - lat) ** 2 + (school_lon - lon) ** 2
+    distance_sq = distance_sq.dropna()
+    if distance_sq.empty:
+        return None
+
+    closest_idx = distance_sq.idxmin()
+    if float(distance_sq.loc[closest_idx]) > max_distance_degrees**2:
+        return None
+
+    row = df_schools.loc[closest_idx]
+    for id_col in ["source_school_id", "SzkolaIdentyfikator"]:
+        if id_col not in row.index:
+            continue
+        value = row.get(id_col)
+        if pd.notna(value) and str(value).strip():
+            return str(value)
+    return None
+
+
+def display_cell(value: Any, fallback: str = "—") -> str:
+    """Czytelny zapis wartości w tabelach użytkowych."""
+    if value is None:
+        return fallback
+    try:
+        if pd.isna(value):
+            return fallback
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return text if text and text.lower() not in {"nan", "none"} else fallback
+
+
+def format_points_display(value: Any) -> str:
+    """Formatuje próg punktowy bez technicznych zer."""
+    try:
+        if pd.isna(value):
+            return "—"
+        number = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    return str(int(number)) if number.is_integer() else f"{number:.2f}".rstrip("0")
+
+
+def threshold_certainty_display(value: Any) -> str:
+    """Skraca techniczne etykiety progów do tekstu dla rodzica i ucznia."""
+    text = display_cell(value, "")
+    mapping = {
+        "klasowy 2025 - dokładny": "klasowy, dokładny",
+        "klasowy 2025 - przybliżony": "klasowy, przybliżony",
+        "szkolny 2025 - brak dopasowania klasy": "szkolny, brak klasy",
+        "brak progu": "brak danych",
+    }
+    return mapping.get(text, text or "—")
+
+
+def profile_or_job_display(row: pd.Series) -> str:
+    """Łączy profil ogólny i zawód w jedną kolumnę tabeli oferty."""
+    profile = display_cell(row.get("PrzedmiotyRozszerzone"), "")
+    job = display_cell(row.get("Zawod"), "")
+    if profile and job:
+        return f"{profile} | zawód: {job}"
+    return profile or job or "—"
+
+
+def select_school_classes_for_year(
+    df_classes: pd.DataFrame,
+    school_identifier: Any,
+    year: int,
+) -> pd.DataFrame:
+    """Wybiera wszystkie klasy danej szkoły z konkretnego roku danych."""
+    if df_classes.empty or "SzkolaIdentyfikator" not in df_classes.columns:
+        return df_classes.iloc[0:0].copy()
+    result = df_classes[
+        df_classes["SzkolaIdentyfikator"].astype(str).eq(str(school_identifier))
+    ]
+    if "year" in result.columns:
+        result = result[pd.to_numeric(result["year"], errors="coerce").eq(year)]
+    return result.copy()
+
+
+def threshold_range_display(df_classes: pd.DataFrame) -> str:
+    """Zwraca zakres progów klasowych w czytelnym formacie."""
+    if df_classes.empty or "Prog_min_klasa" not in df_classes.columns:
+        return "—"
+    values = pd.to_numeric(df_classes["Prog_min_klasa"], errors="coerce").dropna()
+    if values.empty:
+        return "—"
+    min_value = format_points_display(values.min())
+    max_value = format_points_display(values.max())
+    return min_value if min_value == max_value else f"{min_value}-{max_value}"
+
+
+def build_offer_2026_display_table(df_classes: pd.DataFrame) -> pd.DataFrame:
+    """Buduje tabelę aktualnej oferty 2026 do panelu szkoły."""
+    columns = [
+        "Klasa",
+        "Rozszerzenia / zawód",
+        "Języki",
+        "Miejsca",
+        "Próg ref. 2025",
+        "Pewność",
+    ]
+    if df_classes.empty:
+        return pd.DataFrame(columns=columns)
+
+    classes = df_classes.copy()
+    if "Prog_min_klasa" in classes.columns:
+        classes["_sort_threshold"] = pd.to_numeric(
+            classes["Prog_min_klasa"], errors="coerce"
+        )
+    else:
+        classes["_sort_threshold"] = pd.NA
+    classes = classes.sort_values(
+        ["_sort_threshold", "OddzialNazwa"],
+        ascending=[False, True],
+        na_position="last",
+    )
+
+    rows = []
+    for _, row in classes.iterrows():
+        rows.append(
+            {
+                "Klasa": display_cell(row.get("OddzialNazwa")),
+                "Rozszerzenia / zawód": profile_or_job_display(row),
+                "Języki": display_cell(row.get("JezykiObce")),
+                "Miejsca": format_points_display(row.get("LiczbaMiejsc")),
+                "Próg ref. 2025": format_points_display(row.get("Prog_min_klasa")),
+                "Pewność": threshold_certainty_display(row.get("ProgUsedLevel")),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def build_legacy_threshold_display_table(df_classes: pd.DataFrame) -> pd.DataFrame:
+    """Buduje tabelę wszystkich klas 2025 z progami dla wybranej szkoły."""
+    columns = ["Klasa 2025", "Rozszerzenia", "Języki", "Próg 2025"]
+    if df_classes.empty:
+        return pd.DataFrame(columns=columns)
+
+    classes = df_classes.copy()
+    if "Prog_min_klasa" in classes.columns:
+        classes["_sort_threshold"] = pd.to_numeric(
+            classes["Prog_min_klasa"], errors="coerce"
+        )
+    else:
+        classes["_sort_threshold"] = pd.NA
+    classes = classes.sort_values(
+        ["_sort_threshold", "OddzialNazwa"],
+        ascending=[False, True],
+        na_position="last",
+    )
+
+    rows = []
+    for _, row in classes.iterrows():
+        rows.append(
+            {
+                "Klasa 2025": display_cell(row.get("OddzialNazwa")),
+                "Rozszerzenia": display_cell(row.get("PrzedmiotyRozszerzone")),
+                "Języki": display_cell(row.get("JezykiObce")),
+                "Próg 2025": format_points_display(row.get("Prog_min_klasa")),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
 
 
 def load_metadata(excel_path: Path, year: int | None = None) -> pd.DataFrame:
@@ -360,6 +565,7 @@ def aggregate_filtered_class_data(
                         "nazwa": class_row.get("OddzialNazwa"),
                         "url": class_row.get("UrlGrupy"),
                         "min_pkt_klasy": class_row.get("Prog_min_klasa"),
+                        "threshold_year": class_row.get("threshold_year"),
                     }
                 )
             detailed_filtered_classes_info[szk_id] = details
@@ -523,7 +729,16 @@ def add_school_markers_to_map(
                         if class_min_pkt_float.is_integer()
                         else class_min_pkt_float
                     )
-                    line += f" (próg: {formatted_min_pkt} pkt)"
+                    threshold_year = class_detail.get("threshold_year")
+                    threshold_prefix = ""
+                    try:
+                        if pd.notna(threshold_year) and isinstance(
+                            threshold_year, (int, float, str)
+                        ):
+                            threshold_prefix = f"{int(float(threshold_year))}: "
+                    except (TypeError, ValueError):
+                        threshold_prefix = ""
+                    line += f" ({threshold_prefix}{formatted_min_pkt})"
                 popup_html += line + "<br>"
 
         if "url" in row and pd.notna(row["url"]):

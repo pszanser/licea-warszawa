@@ -88,6 +88,14 @@ from visualization.generate_map import (
     apply_filters_to_classes,
     aggregate_filtered_class_data,
     add_school_markers_to_map,
+    build_legacy_threshold_display_table,
+    build_offer_2026_display_table,
+    display_cell,
+    find_school_by_map_point,
+    format_points_display,
+    select_school_classes_for_year,
+    threshold_certainty_display,
+    threshold_range_display,
 )
 from visualization import plots
 from visualization.release_notes import load_latest_release_notes
@@ -121,6 +129,10 @@ FIT_DISPLAY_COLUMNS = {
     "MinProg": "Próg",
     "Dzielnica": "Dzielnica",
     "PrzedmiotyRozszerzone": "Rozszerzenia",
+    "Zawod": "Zawód",
+    "JezykiObce": "Języki",
+    "LiczbaMiejsc": "Miejsca",
+    "ProgUsedLevel": "Pewność progu",
 }
 
 
@@ -139,6 +151,7 @@ FIT_START_POINT_KEY = "fit_start_point"
 FIT_START_POINT_HINT_KEY = "fit_start_point_hint_shown"
 FIT_LAST_MAP_CLICK_KEY = "fit_last_map_click"
 FIT_START_POINT_FEEDBACK_KEY = "fit_start_point_feedback"
+PZO_MAP_SELECTED_SCHOOL_KEY = "pzo_map_selected_school_id"
 FIT_SCHOOL_SUMMARY_COLUMNS = [
     "FitScore",
     "NazwaSzkoly",
@@ -428,6 +441,23 @@ def load_quality_cached(
 
 
 @st.cache_data(show_spinner=False)
+def load_year_sheet_cached(
+    excel_file: Path,
+    sheet_name: str,
+    selected_year: int | None,
+    data_version: int,
+) -> pd.DataFrame:
+    _ = data_version
+    try:
+        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+    except Exception:
+        return pd.DataFrame()
+    if selected_year is not None and "year" in df.columns:
+        df = df[df["year"] == selected_year].copy()
+    return df
+
+
+@st.cache_data(show_spinner=False)
 def load_all_data(
     excel_file: Path, selected_year: int | None, data_version: int
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
@@ -502,6 +532,431 @@ def _build_fit_dataframe_column_config() -> dict:
     }
 
 
+def _display_value(value, fallback: str = "—") -> str:
+    if value is None:
+        return fallback
+    try:
+        if pd.isna(value):
+            return fallback
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return text if text and text.lower() != "nan" else fallback
+
+
+def _first_detail_row(df: pd.DataFrame, key: str, value) -> pd.Series | None:
+    if df.empty or key not in df.columns:
+        return None
+    value_text = str(value)
+    matches = df[df[key].astype(str).eq(value_text)]
+    if matches.empty:
+        return None
+    return matches.iloc[0]
+
+
+def _format_class_option(row: pd.Series) -> str:
+    return f"{row.get('NazwaSzkoly', '')} — {row.get('OddzialNazwa', '')}"
+
+
+def _rows_for_school_id(df: pd.DataFrame, school_id: str | None) -> pd.DataFrame:
+    if df.empty or not school_id:
+        return df.iloc[0:0].copy()
+    for id_col in ["source_school_id", "SzkolaIdentyfikator"]:
+        if id_col not in df.columns:
+            continue
+        matches = df[df[id_col].astype(str).eq(str(school_id))]
+        if not matches.empty:
+            return matches.copy()
+    return df.iloc[0:0].copy()
+
+
+def _school_id_from_map_state(
+    map_state: dict | None, df_schools_to_display: pd.DataFrame
+) -> str | None:
+    if not isinstance(map_state, dict):
+        return None
+    return find_school_by_map_point(
+        df_schools_to_display, map_state.get("last_object_clicked")
+    )
+
+
+def _detail_metric_grid(items: list[tuple[str, object]]) -> None:
+    rows = [
+        {"Pole": label, "Wartość": _display_value(value)}
+        for label, value in items
+        if _display_value(value) != "—"
+    ]
+    if rows:
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    else:
+        st.caption("Brak szczegółów w danych źródłowych.")
+
+
+def _render_text_block(preview: object, full_text: object, label: str) -> None:
+    preview_text = _display_value(preview, "")
+    full = _display_value(full_text, "")
+    if preview_text:
+        st.write(preview_text)
+    if full and full != preview_text:
+        with st.expander(label, expanded=False):
+            st.markdown(full)
+    elif not preview_text and full:
+        st.markdown(full)
+    elif not preview_text and not full:
+        st.caption("Brak opisu w danych źródłowych.")
+
+
+def _sort_school_classes_for_details(df_classes: pd.DataFrame) -> pd.DataFrame:
+    if df_classes.empty:
+        return df_classes.copy()
+    classes = df_classes.copy()
+    classes["_sort_threshold"] = pd.to_numeric(
+        classes.get("Prog_min_klasa"), errors="coerce"
+    )
+    return classes.sort_values(
+        ["_sort_threshold", "OddzialNazwa"],
+        ascending=[False, True],
+        na_position="last",
+    ).drop(columns=["_sort_threshold"], errors="ignore")
+
+
+def _selected_dataframe_position(table_state, row_count: int) -> int:
+    selected_rows = []
+    selection = getattr(table_state, "selection", None)
+    if selection is not None:
+        selected_rows = list(getattr(selection, "rows", []))
+    elif isinstance(table_state, dict):
+        selected_rows = table_state.get("selection", {}).get("rows", [])
+    selected_position = selected_rows[0] if selected_rows else 0
+    if row_count <= 0:
+        return 0
+    return min(int(selected_position), row_count - 1)
+
+
+def _render_summary_value(label: str, value: object) -> None:
+    st.caption(label)
+    st.markdown(f"**{display_cell(value)}**")
+
+
+def _render_pzo_class_summary(detail: pd.Series, class_row: pd.Series) -> None:
+    profile_value = display_cell(
+        detail.get("PrzedmiotyRozszerzone"), ""
+    ) or display_cell(detail.get("Zawod"), "")
+    language_value = display_cell(detail.get("JezykiObce"), "") or display_cell(
+        detail.get("JezykiObceIkonyOpis"), ""
+    )
+    summary_cols = st.columns([1, 2, 2, 1.2, 1.8])
+    with summary_cols[0]:
+        _render_summary_value(
+            "Miejsca", format_points_display(detail.get("LiczbaMiejsc"))
+        )
+    with summary_cols[1]:
+        _render_summary_value("Rozszerzenia / zawód", profile_value)
+    with summary_cols[2]:
+        _render_summary_value("Języki", language_value)
+    with summary_cols[3]:
+        _render_summary_value(
+            "Próg ref. 2025",
+            format_points_display(
+                class_row.get("MinProg", class_row.get("Prog_min_klasa"))
+            ),
+        )
+    with summary_cols[4]:
+        _render_summary_value(
+            "Pewność",
+            threshold_certainty_display(
+                detail.get("ProgUsedLevel", class_row.get("ProgUsedLevel"))
+            ),
+        )
+
+
+def _render_pzo_class_details(
+    class_row: pd.Series,
+    *,
+    class_details: pd.DataFrame,
+    school_details: pd.DataFrame,
+    threshold_matches: pd.DataFrame,
+) -> None:
+    class_id = class_row.get("source_class_id")
+    school_id = class_row.get("source_school_id")
+    detail = _first_detail_row(class_details, "source_class_id", class_id)
+    school_detail = _first_detail_row(school_details, "source_school_id", school_id)
+    if detail is None:
+        detail = class_row
+
+    st.markdown("**Szczegóły wybranej klasy 2026**")
+    st.markdown(f"#### {display_cell(detail.get('OddzialNazwa'))}")
+    _render_pzo_class_summary(detail, class_row)
+
+    tab_offer, tab_profile, tab_criteria, tab_thresholds, tab_school = st.tabs(
+        [
+            "Oferta klasy",
+            "Opis profilu",
+            "Kryteria punktowane",
+            "Progi z 2025",
+            "Szkoła",
+        ]
+    )
+
+    with tab_offer:
+        _detail_metric_grid(
+            [
+                ("Szkoła", detail.get("NazwaSzkoly")),
+                ("Klasa", detail.get("OddzialNazwa")),
+                ("Liczba miejsc", detail.get("LiczbaMiejsc")),
+                ("Typ grupy", detail.get("TypOddzialu")),
+                ("Identyfikator", detail.get("OddzialKod")),
+                ("Liczba oddziałów", detail.get("LiczbaOddzialow")),
+                ("Rozszerzenia", detail.get("PrzedmiotyRozszerzone")),
+                ("Zawód", detail.get("Zawod")),
+                ("Dyscyplina sportowa", detail.get("DyscyplinaSportowa")),
+                (
+                    "Języki",
+                    display_cell(detail.get("JezykiObce"), "")
+                    or display_cell(detail.get("JezykiObceIkonyOpis"), ""),
+                ),
+            ]
+        )
+
+    with tab_profile:
+        _render_text_block(
+            detail.get("OpisOddzialuPreview"),
+            detail.get("OpisOddzialuMarkdown"),
+            "Pełny opis profilu",
+        )
+
+    with tab_criteria:
+        _detail_metric_grid(
+            [
+                ("Pierwszy punktowany przedmiot", detail.get("Punktowany1")),
+                ("Drugi punktowany przedmiot", detail.get("Punktowany2")),
+                ("Trzeci punktowany przedmiot", detail.get("Punktowany3")),
+                ("Czwarty punktowany przedmiot", detail.get("Punktowany4")),
+            ]
+        )
+        criteria_text = _display_value(detail.get("KryteriaPunktowane"), "")
+        if criteria_text:
+            with st.expander("Pełny tekst kryteriów", expanded=False):
+                st.write(criteria_text)
+
+    with tab_thresholds:
+        _detail_metric_grid(
+            [
+                (
+                    "Próg referencyjny 2025",
+                    format_points_display(
+                        class_row.get("MinProg", class_row.get("Prog_min_klasa"))
+                    ),
+                ),
+                (
+                    "Status progu",
+                    threshold_certainty_display(
+                        detail.get("ProgUsedLevel", class_row.get("ProgUsedLevel"))
+                    ),
+                ),
+                ("Dopasowana klasa 2025", detail.get("ProgMatchOldClass")),
+            ]
+        )
+        technical_rows = [
+            ("Metoda dopasowania", detail.get("ProgMatchMethod")),
+            ("Wynik dopasowania", detail.get("ProgMatchScore")),
+        ]
+        if any(display_cell(value, "") for _, value in technical_rows):
+            with st.expander("Szczegóły techniczne dopasowania", expanded=False):
+                _detail_metric_grid(technical_rows)
+        if (
+            not threshold_matches.empty
+            and "source_class_id" in threshold_matches.columns
+        ):
+            candidates = threshold_matches[
+                threshold_matches["source_class_id"].astype(str).eq(str(class_id))
+            ].copy()
+            if not candidates.empty:
+                display_cols = [
+                    "candidate_rank",
+                    "OldOddzialNazwa",
+                    "Prog_min_klasa",
+                    "match_status",
+                    "match_score",
+                ]
+                candidate_display = candidates[
+                    [col for col in display_cols if col in candidates.columns]
+                ].rename(
+                    columns={
+                        "candidate_rank": "Kandydat",
+                        "OldOddzialNazwa": "Klasa 2025",
+                        "Prog_min_klasa": "Próg 2025",
+                        "match_status": "Status",
+                        "match_score": "Wynik",
+                    }
+                )
+                if "Próg 2025" in candidate_display.columns:
+                    candidate_display["Próg 2025"] = candidate_display[
+                        "Próg 2025"
+                    ].apply(format_points_display)
+                if "Status" in candidate_display.columns:
+                    candidate_display["Status"] = (
+                        candidate_display["Status"]
+                        .map(
+                            {
+                                "trusted": "dokładny",
+                                "approximate": "przybliżony",
+                                "candidate_only": "kandydat",
+                            }
+                        )
+                        .fillna(candidate_display["Status"])
+                    )
+                with st.expander("Podobne klasy z 2025", expanded=False):
+                    st.dataframe(
+                        candidate_display.fillna("—"),
+                        width="stretch",
+                        hide_index=True,
+                    )
+
+    with tab_school:
+        source = school_detail if school_detail is not None else detail
+        _detail_metric_grid(
+            [
+                ("Nazwa", source.get("NazwaSzkoly")),
+                ("Adres", source.get("AdresSzkoly")),
+                ("Dzielnica", source.get("Dzielnica")),
+                ("Telefon", source.get("Telefon")),
+                ("E-mail", source.get("Email")),
+            ]
+        )
+        www = _display_value(source.get("WWW"), "")
+        pzo_url = _display_value(source.get("OfertaPzoUrl"), "")
+        link_col1, link_col2 = st.columns(2)
+        if www:
+            with link_col1:
+                st.link_button("Strona szkoły", www, width="stretch")
+        if pzo_url:
+            with link_col2:
+                st.link_button("Wyszukiwarka PZO", pzo_url, width="stretch")
+        _render_text_block(
+            source.get("OpisSzkolyPreview"),
+            source.get("OpisSzkolyMarkdown"),
+            "Pełny opis placówki",
+        )
+
+
+def _render_pzo_map_school_details(
+    school_row: pd.Series,
+    *,
+    df_filtered_classes: pd.DataFrame,
+    legacy_classes: pd.DataFrame,
+    class_details: pd.DataFrame,
+    school_details: pd.DataFrame,
+    threshold_matches: pd.DataFrame,
+) -> None:
+    school_id = school_row.get("source_school_id") or school_row.get(
+        "SzkolaIdentyfikator"
+    )
+    legacy_school_id = school_row.get("SzkolaIdentyfikator")
+    school_detail = _first_detail_row(school_details, "source_school_id", school_id)
+    school_source = school_detail if school_detail is not None else school_row
+    school_classes = _sort_school_classes_for_details(
+        _rows_for_school_id(df_filtered_classes, str(school_id))
+    )
+    legacy_school_classes = select_school_classes_for_year(
+        legacy_classes, legacy_school_id, 2025
+    )
+
+    st.markdown("**Szczegóły szkoły z mapy**")
+    st.markdown(f"### {_display_value(school_source.get('NazwaSzkoly'))}")
+    st.caption(
+        f"{display_cell(school_source.get('Dzielnica'))} · "
+        f"{display_cell(school_source.get('AdresSzkoly'))}"
+    )
+
+    ranking_value = school_row.get("RankingPoz")
+    if display_cell(ranking_value, ""):
+        ranking_display = format_points_display(ranking_value)
+    else:
+        ranking_display = format_points_display(school_source.get("RankingPoz"))
+    legacy_threshold_count = 0
+    if not legacy_school_classes.empty and "Prog_min_klasa" in legacy_school_classes:
+        legacy_threshold_count = int(
+            pd.to_numeric(legacy_school_classes["Prog_min_klasa"], errors="coerce")
+            .notna()
+            .sum()
+        )
+    metric_cols = st.columns(4)
+    with metric_cols[0]:
+        st.metric("Oferta 2026", f"{len(school_classes)} klas")
+    with metric_cols[1]:
+        st.metric("Klasy 2025", f"{legacy_threshold_count} z progami")
+    with metric_cols[2]:
+        st.metric("Zakres progów 2025", threshold_range_display(legacy_school_classes))
+    with metric_cols[3]:
+        st.metric("Ranking", ranking_display)
+
+    info_col, links_col = st.columns([2, 1], vertical_alignment="top")
+    with info_col:
+        _detail_metric_grid(
+            [
+                ("Adres", school_source.get("AdresSzkoly")),
+                ("Dzielnica", school_source.get("Dzielnica")),
+                ("Telefon", school_source.get("Telefon")),
+                ("E-mail", school_source.get("Email")),
+            ]
+        )
+    with links_col:
+        www = _display_value(school_source.get("WWW"), "")
+        pzo_url = _display_value(school_source.get("OfertaPzoUrl"), "")
+        if www:
+            st.link_button("Strona szkoły", www, width="stretch")
+        if pzo_url:
+            st.link_button("Wyszukiwarka PZO", pzo_url, width="stretch")
+
+    _render_text_block(
+        school_source.get("OpisSzkolyPreview"),
+        school_source.get("OpisSzkolyMarkdown"),
+        "Pełny opis placówki",
+    )
+
+    selected_class_row = None
+    st.markdown("**Oferta 2026**")
+    st.caption("Aktualna oficjalna oferta PZO, zawężona aktywnymi filtrami.")
+    if school_classes.empty:
+        st.info("Ta szkoła nie ma klas spełniających aktualne filtry.")
+    else:
+        offer_display = build_offer_2026_display_table(school_classes)
+        offer_state = st.dataframe(
+            offer_display,
+            width="stretch",
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
+            key=f"pzo_school_offer_2026_{school_id}",
+        )
+        selected_position = _selected_dataframe_position(
+            offer_state, len(school_classes)
+        )
+        selected_class_row = school_classes.iloc[selected_position]
+
+    st.markdown("**Klasy 2025 z progami**")
+    st.caption(
+        "Pełna historia klas tej szkoły z poprzedniego naboru, bez filtrów 2026."
+    )
+    if legacy_school_classes.empty:
+        st.info("Brak klas 2025 dla tej szkoły w danych historycznych.")
+    else:
+        st.dataframe(
+            build_legacy_threshold_display_table(legacy_school_classes),
+            width="stretch",
+            hide_index=True,
+        )
+
+    if selected_class_row is not None:
+        _render_pzo_class_details(
+            selected_class_row,
+            class_details=class_details,
+            school_details=school_details,
+            threshold_matches=threshold_matches,
+        )
+
+
 @st.fragment
 def _render_fit_results(
     *,
@@ -512,6 +967,10 @@ def _render_fit_results(
     selected_year,
     export_filter_entries: list,
     ranking_max_reference: float | None = None,
+    class_details: pd.DataFrame | None = None,
+    school_details: pd.DataFrame | None = None,
+    threshold_matches: pd.DataFrame | None = None,
+    enable_pzo_details: bool = False,
 ) -> None:
     """Renderuje sekcję obliczeń FitScore wewnątrz fragmentu Streamlit.
 
@@ -751,17 +1210,53 @@ Jeśli brakuje danych dla ważonej składowej (np. rankingu albo progu), ta skł
 
     st.markdown("**Najlepsze klasy dla mnie**")
     st.caption(f"Pokazano top {top_n} z {total_matches} dopasowanych klas.")
-    st.dataframe(
-        display_df,
-        width="stretch",
-        hide_index=True,
-        column_config=column_config,
+    details_enabled = (
+        enable_pzo_details and class_details is not None and not class_details.empty
     )
+    table_state = None
+    if details_enabled:
+        table_state = st.dataframe(
+            display_df,
+            width="stretch",
+            hide_index=True,
+            column_config=column_config,
+            on_select="rerun",
+            selection_mode="single-row",
+            key="fit_results_2026",
+        )
+    else:
+        st.dataframe(
+            display_df,
+            width="stretch",
+            hide_index=True,
+            column_config=column_config,
+        )
     st.caption(
         "Ryzyko progu: 🟢 bezpiecznie (zapas ≥15 pkt) · "
         "🟡 realnie (0–14 pkt) · 🟠 ryzykownie (brak 1–10 pkt) · "
         "🔴 bardzo ryzykownie (brak >10 pkt)."
     )
+    if details_enabled and not top_results.empty:
+        selected_rows = []
+        selection = getattr(table_state, "selection", None)
+        if selection is not None:
+            selected_rows = list(getattr(selection, "rows", []))
+        elif isinstance(table_state, dict):
+            selected_rows = table_state.get("selection", {}).get("rows", [])
+        selected_position = selected_rows[0] if selected_rows else 0
+        selected_position = min(int(selected_position), len(top_results) - 1)
+        _render_pzo_class_details(
+            top_results.iloc[selected_position],
+            class_details=(
+                class_details if class_details is not None else pd.DataFrame()
+            ),
+            school_details=(
+                school_details if school_details is not None else pd.DataFrame()
+            ),
+            threshold_matches=(
+                threshold_matches if threshold_matches is not None else pd.DataFrame()
+            ),
+        )
 
     school_summary = pd.DataFrame()
     if not fit_results.empty:
@@ -857,6 +1352,8 @@ Jeśli brakuje danych dla ważonej składowej (np. rankingu albo progu), ta skł
         data=fit_buf,
         file_name=f"moje_dopasowanie_{selected_year}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=f"download_fit_{selected_year}",
+        on_click="ignore",
     )
 
 
@@ -908,12 +1405,29 @@ def main():
     df_schools_raw, df_classes_raw = load_all_data(
         latest_excel_file, selected_year, data_version
     )
+    df_school_details = load_year_sheet_cached(
+        latest_excel_file, "school_details", selected_year, data_version
+    )
+    df_class_details = load_year_sheet_cached(
+        latest_excel_file, "class_details", selected_year, data_version
+    )
+    df_threshold_matches = load_year_sheet_cached(
+        latest_excel_file, "threshold_matches", selected_year, data_version
+    )
+    df_classes_2025 = load_year_sheet_cached(
+        latest_excel_file, "classes", 2025, data_version
+    )
 
     if df_schools_raw is None or df_classes_raw is None:
         st.error(
             "Nie udało się wczytać danych szkół lub klas. Mapa nie zostanie wygenerowana."
         )
         return
+    enable_pzo_details = (
+        selected_year == 2026
+        and meta_row.get("data_status") == "official_offer"
+        and not df_class_details.empty
+    )
     ranking_year = get_filter_ranking_year(df_schools_raw, selected_year)
     ranking_max_reference = None
     if "RankingPoz" in df_classes_raw.columns:
@@ -1005,6 +1519,7 @@ dopasowania).
                 FIT_START_POINT_HINT_KEY,
                 FIT_LAST_MAP_CLICK_KEY,
                 FIT_START_POINT_FEEDBACK_KEY,
+                PZO_MAP_SELECTED_SCHOOL_KEY,
                 "schools_map",
             ]
             for k in filter_widget_keys + fit_widget_keys:
@@ -1239,11 +1754,18 @@ dopasowania).
     # w session_state["schools_map"]. Dzięki temu możemy zaktualizować punkt startowy
     # ZANIM zbudujemy nowy obiekt mapy (jeden render zamiast dwóch).
     prev_map_state = st.session_state.get("schools_map") or {}
+    prev_clicked_school_id = (
+        _school_id_from_map_state(prev_map_state, df_schools_to_display)
+        if enable_pzo_details
+        else None
+    )
     pre_clicked_point = select_start_point(prev_map_state, allow_center=False)
     pre_clicked_key = _point_event_key(pre_clicked_point)
     active_start_source = st.session_state.get("fit_start_source") or "Klik na mapie"
     if pre_clicked_point is not None and pre_clicked_key != _get_last_map_click_key():
-        if active_start_source == "Klik na mapie":
+        if prev_clicked_school_id:
+            st.session_state[PZO_MAP_SELECTED_SCHOOL_KEY] = prev_clicked_school_id
+        elif active_start_source == "Klik na mapie":
             _remember_start_point(pre_clicked_point, source="klik na mapie")
             if not st.session_state.get(FIT_START_POINT_HINT_KEY):
                 st.toast(
@@ -1308,13 +1830,45 @@ dopasowania).
 
     with tab_map:
         st.subheader("Mapa szkół")
-        st_folium(
+        map_state = st_folium(
             map_object,
             width=None,
             height=600,
-            returned_objects=["last_clicked", "center", "zoom"],
+            returned_objects=[
+                "last_clicked",
+                "last_object_clicked",
+                "last_object_clicked_tooltip",
+                "last_object_clicked_popup",
+                "center",
+                "zoom",
+            ],
             key="schools_map",
         )
+        if enable_pzo_details and not df_schools_to_display.empty:
+            clicked_school_id = _school_id_from_map_state(
+                map_state, df_schools_to_display
+            )
+            if clicked_school_id:
+                st.session_state[PZO_MAP_SELECTED_SCHOOL_KEY] = clicked_school_id
+
+            selected_school_id = st.session_state.get(PZO_MAP_SELECTED_SCHOOL_KEY)
+            selected_school_rows = _rows_for_school_id(
+                df_schools_to_display, selected_school_id
+            )
+            if selected_school_rows.empty:
+                st.info(
+                    "Kliknij znacznik szkoły na mapie, żeby zobaczyć jej ofertę i klasy."
+                )
+                st.session_state.pop(PZO_MAP_SELECTED_SCHOOL_KEY, None)
+            else:
+                _render_pzo_map_school_details(
+                    selected_school_rows.iloc[0],
+                    df_filtered_classes=df_filtered_classes,
+                    legacy_classes=df_classes_2025,
+                    class_details=df_class_details,
+                    school_details=df_school_details,
+                    threshold_matches=df_threshold_matches,
+                )
 
         if not df_filtered_classes.empty:
             buf = io.BytesIO()
@@ -1331,6 +1885,8 @@ dopasowania).
                 data=buf,
                 file_name=f"moje_klasy_{selected_year}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"download_classes_{selected_year}",
+                on_click="ignore",
             )
 
         if not df_schools_to_display.empty:
@@ -1451,11 +2007,11 @@ dopasowania).
                         if current_center_point is not None:
                             _remember_start_point(
                                 current_center_point,
-                            source="moja lokalizacja / środek mapy",
+                                source="moja lokalizacja / środek mapy",
                             )
                             _push_start_point_feedback(
                                 "success",
-                            "Ustawiono punkt startowy z aktualnego środka mapy.",
+                                "Ustawiono punkt startowy z aktualnego środka mapy.",
                             )
                             st.rerun()
                 with col_clear:
@@ -1566,6 +2122,10 @@ dopasowania).
                     selected_year=selected_year,
                     export_filter_entries=export_filter_entries,
                     ranking_max_reference=ranking_max_reference,
+                    class_details=df_class_details,
+                    school_details=df_school_details,
+                    threshold_matches=df_threshold_matches,
+                    enable_pzo_details=enable_pzo_details,
                 )
 
     with tab_viz:
