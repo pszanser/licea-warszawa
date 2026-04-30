@@ -1,6 +1,7 @@
 import html
 import folium
 from folium.plugins import MarkerCluster, Fullscreen, LocateControl, HeatMap
+import math
 import os
 from pathlib import Path
 import pandas as pd
@@ -164,6 +165,30 @@ def _safe_popup_href(value: Any) -> str | None:
     return html.escape(text, quote=True)
 
 
+def _safe_popup_text(value: Any, fallback: str = "") -> str:
+    try:
+        if pd.isna(value):
+            return fallback
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    if not text or text.lower() in {"nan", "none"}:
+        return fallback
+    return html.escape(text, quote=False)
+
+
+def _safe_map_coordinate(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _format_map_coordinate(value: float) -> str:
+    return str(float(value))
+
+
 def _threshold_year_prefix(value: Any) -> str:
     try:
         if pd.isna(value):
@@ -289,11 +314,21 @@ def select_school_classes_for_year(
     year: int,
 ) -> pd.DataFrame:
     """Wybiera wszystkie klasy danej szkoły z konkretnego roku danych."""
-    if df_classes.empty or "SzkolaIdentyfikator" not in df_classes.columns:
+    if df_classes.empty:
         return df_classes.iloc[0:0].copy()
-    result = df_classes[
-        df_classes["SzkolaIdentyfikator"].astype(str).eq(str(school_identifier))
+    id_columns = [
+        column
+        for column in ["SzkolaIdentyfikator", "source_school_id"]
+        if column in df_classes.columns
     ]
+    if not id_columns:
+        return df_classes.iloc[0:0].copy()
+
+    identifier = str(school_identifier)
+    mask = pd.Series(False, index=df_classes.index)
+    for column in id_columns:
+        mask = mask | df_classes[column].astype(str).eq(identifier)
+    result = df_classes[mask]
     if "year" in result.columns:
         result = result[pd.to_numeric(result["year"], errors="coerce").eq(year)]
     return result.copy()
@@ -726,35 +761,51 @@ def add_school_markers_to_map(
     cluster.add_to(folium_map_object)
 
     for _, row in df_schools_to_display.iterrows():
-        tooltip_text = f"{row['NazwaSzkoly']} ({row['Dzielnica']})"
+        school_lat = _safe_map_coordinate(row.get("SzkolaLat"))
+        school_lon = _safe_map_coordinate(row.get("SzkolaLon"))
+        if school_lat is None or school_lon is None:
+            continue
+
+        school_name = _safe_popup_text(row.get("NazwaSzkoly"))
+        district = _safe_popup_text(row.get("Dzielnica"))
+        address = _safe_popup_text(row.get("AdresSzkoly"))
+        tooltip_text = f"{school_name} ({district})" if district else school_name
         szk_id = row.get("SzkolaIdentyfikator")
         source_school_id = row.get("source_school_id", szk_id)
+        destination = (
+            f"{_format_map_coordinate(school_lat)},"
+            f"{_format_map_coordinate(school_lon)}"
+        )
 
         popup_html = (
             "<span "
             f"data-source-school-id='{html.escape(str(source_school_id), quote=True)}' "
             "style='display:none'></span>"
-            f"<b>{row['NazwaSzkoly']}</b><br>"
+            f"<b>{school_name}</b><br>"
         )
-        nav_url = (
-            "https://www.google.com/maps/dir/?api=1&destination="
-            f"{row['SzkolaLat']},{row['SzkolaLon']}"
-        )
+        nav_url = "https://www.google.com/maps/dir/?api=1&destination=" f"{destination}"
         popup_html += (
-            f"Adres: <a href='{nav_url}' target='_blank'>{row['AdresSzkoly']}</a><br>"
+            f"Adres: <a href='{nav_url}' target='_blank' "
+            f"rel='noopener noreferrer'>{address}</a><br>"
         )
-        if origin_lat is not None and origin_lon is not None:
+        origin_lat_safe = _safe_map_coordinate(origin_lat)
+        origin_lon_safe = _safe_map_coordinate(origin_lon)
+        if origin_lat_safe is not None and origin_lon_safe is not None:
+            origin = (
+                f"{_format_map_coordinate(origin_lat_safe)},"
+                f"{_format_map_coordinate(origin_lon_safe)}"
+            )
             commute_url = (
                 "https://www.google.com/maps/dir/?api=1"
-                f"&origin={origin_lat},{origin_lon}"
-                f"&destination={row['SzkolaLat']},{row['SzkolaLon']}"
+                f"&origin={origin}"
+                f"&destination={destination}"
                 "&travelmode=transit"
             )
             popup_html += (
-                f"<a href='{commute_url}' target='_blank'>"
+                f"<a href='{commute_url}' target='_blank' rel='noopener noreferrer'>"
                 "🚌 Sprawdź dojazd z Twojego punktu</a><br>"
             )
-        popup_html += f"Dzielnica: {row['Dzielnica']}<br>"
+        popup_html += f"Dzielnica: {district}<br>"
 
         summary = school_summary_from_filtered.get(szk_id, {})
 
@@ -762,7 +813,9 @@ def add_school_markers_to_map(
             row.get("Ranking_historyczny_szkola")
         )
         if ranking_history:
-            popup_html += f"Ranking Perspektywy: {ranking_history}<br>"
+            popup_html += (
+                f"Ranking Perspektywy: {_safe_popup_text(ranking_history)}<br>"
+            )
         else:
             # Użyj rankingu z podsumowania przefiltrowanych klas, jeśli dostępne, inaczej z danych ogólnych szkoły.
             ranking_year = summary.get(
@@ -777,12 +830,17 @@ def add_school_markers_to_map(
                     f" {int(ranking_year)}" if pd.notna(ranking_year) else ""
                 )
                 popup_html += (
-                    f"Ranking Perspektywy{ranking_suffix}: {display_ranking}<br>"
+                    f"Ranking Perspektywy{ranking_suffix}: "
+                    f"{_safe_popup_text(display_ranking)}<br>"
                 )
 
         historical_thresholds = row.get("Progi_historyczne_szkola")
         if pd.notna(historical_thresholds) and str(historical_thresholds).strip():
-            history_html = "<br>".join(str(historical_thresholds).split("; "))
+            history_html = "<br>".join(
+                _safe_popup_text(value)
+                for value in str(historical_thresholds).split("; ")
+                if _safe_popup_text(value)
+            )
             popup_html += f"Progi punktowe:<br>{history_html}<br>"
         else:
             min_prog = summary.get("Prog_min_szkola", row.get("Prog_min_szkola"))
@@ -791,11 +849,16 @@ def add_school_markers_to_map(
                 threshold_year = row.get("Prog_szkola_threshold_year")
                 year_prefix = _threshold_year_prefix(threshold_year)
                 if min_prog == max_prog:
-                    popup_html += f"Progi punktowe:<br>{year_prefix}{min_prog}<br>"
-                else:
-                    popup_html += (
-                        f"Progi punktowe:<br>{year_prefix}{min_prog}-{max_prog}<br>"
+                    threshold_text = _safe_popup_text(
+                        f"{year_prefix}{format_points_display(min_prog)}"
                     )
+                    popup_html += f"Progi punktowe:<br>{threshold_text}<br>"
+                else:
+                    threshold_text = _safe_popup_text(
+                        f"{year_prefix}{format_points_display(min_prog)}-"
+                        f"{format_points_display(max_prog)}"
+                    )
+                    popup_html += f"Progi punktowe:<br>{threshold_text}<br>"
 
         num_matching_classes = class_count_per_school.get(szk_id, 0)
         if num_matching_classes > 0:
@@ -815,7 +878,7 @@ def add_school_markers_to_map(
 
                 line = "- "
                 safe_class_url = _safe_popup_href(class_url)
-                safe_class_name = html.escape(str(class_name), quote=False)
+                safe_class_name = _safe_popup_text(class_name, "N/A")
                 if safe_class_url:
                     line += (
                         f"<a href='{safe_class_url}' target='_blank' "
@@ -826,11 +889,7 @@ def add_school_markers_to_map(
 
                 if class_min_pkt is not None and pd.notna(class_min_pkt):
                     class_min_pkt_float = float(class_min_pkt)
-                    formatted_min_pkt = (
-                        int(class_min_pkt_float)
-                        if class_min_pkt_float.is_integer()
-                        else class_min_pkt_float
-                    )
+                    formatted_min_pkt = format_points_display(class_min_pkt_float)
                     threshold_year = class_detail.get("threshold_year")
                     threshold_prefix = _threshold_year_prefix(threshold_year)
                     line += f" ({threshold_prefix}{formatted_min_pkt})"
@@ -850,10 +909,10 @@ def add_school_markers_to_map(
         marker_color = color_map.get(school_type, "blue")
 
         folium.Marker(
-            location=[row["SzkolaLat"], row["SzkolaLon"]],
-            tooltip=tooltip_text,
+            location=[school_lat, school_lon],
             popup=folium.Popup(popup_html, max_width=350),
             icon=folium.Icon(color=marker_color, icon="graduation-cap", prefix="fa"),
+            tooltip=tooltip_text,
         ).add_to(cluster)
 
 

@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+import uuid
 
 import pandas as pd
 
@@ -6,6 +8,7 @@ from scripts.pipeline import (
     add_common_class_columns,
     add_year_metadata,
     add_threshold_usage_labels,
+    attach_stable_school_ids,
     apply_threshold_matches,
     apply_latest_rankings,
     best_thresholds_for_keys,
@@ -42,7 +45,7 @@ def test_best_thresholds_prefers_lower_priority_source():
 
 
 def test_load_pzo_offer_tables_downloads_missing_raw_snapshot(monkeypatch):
-    raw_dir = Path.cwd() / ".missing_pzo_unit_test"
+    raw_dir = Path.cwd() / f".missing_pzo_unit_test_{uuid.uuid4().hex}"
     calls = {}
     snapshot = {
         "manifest": {"school_count": 1},
@@ -76,19 +79,22 @@ def test_load_pzo_offer_tables_downloads_missing_raw_snapshot(monkeypatch):
     )
     monkeypatch.setattr("scripts.pipeline.build_pzo_tables", fake_build_tables)
 
-    result = load_pzo_offer_tables(
-        {
-            "year": 2026,
-            "school_year": "2026/2027",
-            "offer": {
-                "path": str(raw_dir),
-                "base_url": "https://example.test",
-                "public_context": "/omikron-public",
-                "school_type_ids": [4],
-                "timeout": 15,
-            },
-        }
-    )
+    try:
+        result = load_pzo_offer_tables(
+            {
+                "year": 2026,
+                "school_year": "2026/2027",
+                "offer": {
+                    "path": str(raw_dir),
+                    "base_url": "https://example.test",
+                    "public_context": "/omikron-public",
+                    "school_type_ids": [4],
+                    "timeout": 15,
+                },
+            }
+        )
+    finally:
+        shutil.rmtree(raw_dir, ignore_errors=True)
 
     assert calls["raw_dir"] == raw_dir
     assert calls["write_snapshot"] is snapshot
@@ -98,6 +104,30 @@ def test_load_pzo_offer_tables_downloads_missing_raw_snapshot(monkeypatch):
     assert calls["fetch_kwargs"]["year"] == 2026
     assert calls["fetch_kwargs"]["school_type_ids"] == [4]
     assert result["schools"]["source_school_id"].tolist() == ["pzo:1"]
+
+
+def test_attach_stable_school_ids_adds_score_column_without_reference_schools():
+    schools = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "NazwaSzkoly": ["Liceum Testowe"],
+        }
+    )
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "OddzialNazwa": ["1A"],
+        }
+    )
+
+    result_schools, result_classes = attach_stable_school_ids(
+        schools, classes, pd.DataFrame()
+    )
+
+    assert "PzoSchoolMatchScore" in result_schools.columns
+    assert pd.isna(result_schools.iloc[0]["PzoSchoolMatchScore"])
+    assert pd.isna(result_classes.iloc[0]["PzoSchoolMatchScore"])
+    assert result_classes.iloc[0]["PzoSchoolMatchStatus"] == "fallback_name"
 
 
 def test_add_year_metadata_preserves_row_threshold_labels():

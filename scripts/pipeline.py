@@ -1134,6 +1134,7 @@ def attach_stable_school_ids(
     if reference_schools.empty:
         schools["SzkolaIdentyfikator"] = schools["NazwaSzkoly"].apply(normalize_name)
         schools["PzoSchoolMatchStatus"] = "fallback_name"
+        schools["PzoSchoolMatchScore"] = pd.NA
     else:
         refs = reference_schools.copy()
         refs["addr_key"] = refs["AdresSzkoly"].apply(normalize_address)

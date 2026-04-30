@@ -84,6 +84,21 @@ def test_select_school_classes_for_year_uses_school_identifier_and_year():
     assert result["OddzialNazwa"].tolist() == ["1A 2025"]
 
 
+def test_select_school_classes_for_year_accepts_source_school_id():
+    classes = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_1", "lo_2"],
+            "source_school_id": ["pzo:1", "pzo:1", "pzo:2"],
+            "OddzialNazwa": ["1A 2025", "1A 2026", "1B 2025"],
+            "year": [2025, 2026, 2025],
+        }
+    )
+
+    result = select_school_classes_for_year(classes, "pzo:1", 2025)
+
+    assert result["OddzialNazwa"].tolist() == ["1A 2025"]
+
+
 def test_school_detail_offer_table_has_user_labels_and_no_raw_missing_values():
     classes = pd.DataFrame(
         {
@@ -277,6 +292,42 @@ def test_popup_omits_invalid_school_url():
     html = m.get_root().render()
     assert "Strona szkoły" not in html
     assert "javascript:alert" not in html
+
+
+def test_popup_escapes_external_text_fields():
+    row = {
+        **_SCHOOL_ROW,
+        "NazwaSzkoly": "<script>alert(1)</script> LO",
+        "AdresSzkoly": "<img src=x onerror=alert(2)>",
+        "Dzielnica": "<b>Centrum</b>",
+        "Ranking_historyczny_szkola": "2026: <script>alert(3)</script>",
+        "Progi_historyczne_szkola": "2025: <img src=x onerror=alert(4)>",
+    }
+    df = pd.DataFrame([row])
+    m = folium.Map(location=[52.23, 21.01], zoom_start=11)
+    add_school_markers_to_map(
+        folium_map_object=m,
+        df_schools_to_display=df,
+        class_count_per_school={"lo_1": 1},
+        filtered_class_details_per_school={
+            "lo_1": [{"nazwa": "<b>1A</b>", "url": None, "min_pkt_klasy": 150}]
+        },
+        school_summary_from_filtered={},
+    )
+
+    html = m.get_root().render()
+    assert "<script>alert" not in html
+    assert "<img src=x" not in html
+    assert "<b>Centrum</b>" not in html
+    assert "&lt;script&gt;alert" in html
+    assert "&lt;b&gt;1A&lt;/b&gt;" in html
+
+
+def test_popup_omits_commute_link_for_invalid_origin_coordinates():
+    html = _make_map_and_get_popup(origin_lat="52.2' onclick='x", origin_lon=21.0)
+
+    assert "travelmode=transit" not in html
+    assert "onclick" not in html
 
 
 def test_streamlit_popup_can_show_details_hint_under_map():
