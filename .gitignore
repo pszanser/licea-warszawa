@@ -182,12 +182,15 @@ cython_debug/
 .idea/
 
 # Data directories
+data/raw/2026/pzo_omikron_2026_2027/
 results/*
 !results/LO_Warszawa_2025_Warszawa_SL.xlsx
 !results/app/
 !results/app/**
 !results/processed/
 !results/processed/**
+results/processed/pzo_omikron_*.xlsx
+results/processed/~$*.xlsx
 
 # repomix
 repomix-output*
