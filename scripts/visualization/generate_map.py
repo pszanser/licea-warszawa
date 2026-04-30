@@ -1,6 +1,7 @@
 import html
 import folium
 from folium.plugins import MarkerCluster, Fullscreen, LocateControl, HeatMap
+import logging
 import math
 import os
 from pathlib import Path
@@ -10,6 +11,8 @@ from typing import Callable, Any
 from urllib.parse import urlparse
 
 import sys
+
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -91,8 +94,14 @@ def get_default_year(excel_path: Path, available_years: list[int] | None = None)
                 preferred_years = [year for year in preferred_years if year in years]
                 if preferred_years:
                     return max(preferred_years)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.exception(
+            "Nie udało się odczytać arkusza metadata z %s; "
+            "używam domyślnego roku z listy %s. Błąd: %s",
+            excel_path,
+            years,
+            exc,
+        )
 
     return max(years)
 
