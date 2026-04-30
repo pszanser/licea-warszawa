@@ -244,6 +244,38 @@ def test_popup_class_threshold_includes_year():
     assert "(2025: 169.15)" in m.get_root().render()
 
 
+def test_popup_uses_school_page_label_for_school_url():
+    row = {**_SCHOOL_ROW, "url": "https://example.edu.pl"}
+    df = pd.DataFrame([row])
+    m = folium.Map(location=[52.23, 21.01], zoom_start=11)
+    add_school_markers_to_map(
+        folium_map_object=m,
+        df_schools_to_display=df,
+        class_count_per_school={},
+        filtered_class_details_per_school={},
+        school_summary_from_filtered={},
+    )
+
+    html = m.get_root().render()
+    assert "Strona szkoły" in html
+    assert "Zobacz ofertę szkoły" not in html
+
+
+def test_streamlit_popup_can_show_details_hint_under_map():
+    df = pd.DataFrame([_SCHOOL_ROW])
+    m = folium.Map(location=[52.23, 21.01], zoom_start=11)
+    add_school_markers_to_map(
+        folium_map_object=m,
+        df_schools_to_display=df,
+        class_count_per_school={"lo_1": 1},
+        filtered_class_details_per_school={},
+        school_summary_from_filtered={},
+        show_details_hint=True,
+    )
+
+    assert "Szczegóły szkoły i klas są pod mapą." in m.get_root().render()
+
+
 def test_find_school_by_map_point_returns_source_school_id():
     schools = pd.DataFrame(
         [

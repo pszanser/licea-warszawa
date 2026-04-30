@@ -372,6 +372,7 @@ def create_schools_map_streamlit(
             school_summary_from_filtered=school_summary_from_filtered,
             origin_lat=origin_lat,
             origin_lon=origin_lon,
+            show_details_hint=True,
         )
 
     if show_heatmap and not df_schools_to_display.empty:
@@ -1448,9 +1449,11 @@ def main():
 1. **⬅️ Filtry (lewy pasek)** — zacznij od ograniczenia listy: typ szkoły,
    ranking, poszukiwane lub unikane przedmioty rozszerzone, zakres progów
    punktowych. Liczby u góry (Szkoły, Klasy, Średni próg) reagują na bieżąco.
-2. **🗺️ Mapa** — zobacz lokalizacje szkół. **Kliknij dowolne miejsce na mapie**,
+2. **🗺️ Mapa** — zobacz lokalizacje szkół. **Kliknij znacznik szkoły**,
+   żeby wybrać ją na mapie — pod mapą pojawią się dane szkoły, oferta 2026,
+   klasy 2025 z progami i szczegóły wybranej klasy. **Kliknij pusty fragment mapy**,
    żeby zaznaczyć swój punkt startowy (np. dom). Pojawi się fioletowa pinezka 🏠.
-   Po ustawieniu punktu, pinezka każdej szkoły pokazuje link
+   Po ustawieniu punktu, dymek każdej szkoły pokazuje link
    **🚌 Sprawdź dojazd z Twojego punktu** — otwiera Google Maps z trasą komunikacją miejską.
 3. **🎯 Moje dopasowanie** — policzymy ranking klas dopasowanych do Ciebie
    na podstawie Twoich punktów, ważności kryteriów (renoma / szansa / bliskość)

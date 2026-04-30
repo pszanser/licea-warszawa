@@ -618,6 +618,7 @@ def add_school_markers_to_map(
     school_summary_from_filtered: dict[str, dict],
     origin_lat: float | None = None,
     origin_lon: float | None = None,
+    show_details_hint: bool = False,
 ) -> None:
     """
     Dodaje markery szkół do obiektu mapy Folium.
@@ -707,6 +708,8 @@ def add_school_markers_to_map(
             popup_html += (
                 f"Liczba klas spełniających kryteria: {num_matching_classes}<br>"
             )
+        if show_details_hint:
+            popup_html += "Szczegóły szkoły i klas są pod mapą.<br>"
 
         matching_classes_details = filtered_class_details_per_school.get(szk_id, [])
         if matching_classes_details:
@@ -742,7 +745,7 @@ def add_school_markers_to_map(
                 popup_html += line + "<br>"
 
         if "url" in row and pd.notna(row["url"]):
-            popup_html += f"<a href='{row['url']}' target='_blank'>Zobacz ofertę szkoły (ogólnie)</a>"
+            popup_html += f"<a href='{row['url']}' target='_blank'>Strona szkoły</a>"
 
         popup_html = f"<div style='font-size:14px; line-height:1.2;'>{popup_html}</div>"
 
