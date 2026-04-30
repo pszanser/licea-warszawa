@@ -2,13 +2,18 @@ import pandas as pd
 
 from scripts.pipeline import (
     add_common_class_columns,
+    add_threshold_usage_labels,
+    apply_threshold_matches,
     apply_latest_rankings,
     best_thresholds_for_keys,
     historical_school_thresholds,
     load_thresholds,
+    match_reference_thresholds,
     merge_existing_year_sheets,
+    parse_pointed_subjects,
     school_threshold_summary,
     school_ranking_summary,
+    summarize_criteria,
 )
 
 
@@ -160,6 +165,224 @@ def test_load_thresholds_without_sources_returns_merge_schema():
         "threshold_kind",
         "threshold_label",
     }.issubset(result.columns)
+
+
+def test_match_reference_thresholds_marks_exact_match_as_trusted():
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "source_class_id": ["pzo:101"],
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1A - (O) - mat, fiz (ang - niem)"],
+            "OddzialKod": ["1A"],
+            "TypOddzialu": ["ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, fizyka"],
+            "PierwszyJezykObcy": ["język angielski"],
+            "DrugiJezykObcy": ["język niemiecki"],
+        }
+    )
+    thresholds = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1A [O] mat-fiz (ang-niem)"],
+            "SymbolOddzialu": ["1A"],
+            "Prog_min_klasa": [150.5],
+            "threshold_year": [2025],
+            "threshold_kind": ["reference"],
+            "threshold_priority": [1],
+            "threshold_label": ["progi referencyjne 2025"],
+        }
+    )
+
+    matches, selected = match_reference_thresholds(classes, thresholds)
+    classes_with_thresholds = apply_threshold_matches(classes, matches)
+    classes_with_thresholds["Prog_min_szkola"] = 140
+    classes_with_thresholds = add_threshold_usage_labels(classes_with_thresholds)
+
+    assert selected.iloc[0]["match_status"] == "trusted"
+    assert classes_with_thresholds.iloc[0]["Prog_min_klasa"] == 150.5
+    assert classes_with_thresholds.iloc[0]["ProgUsedLevel"] == (
+        "klasowy 2025 - dokładny"
+    )
+
+
+def test_match_reference_thresholds_marks_weaker_but_coded_match_as_approximate():
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "source_class_id": ["pzo:102"],
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1B1 - (O) - mat, fiz, ang (ang - niem)"],
+            "OddzialKod": ["1B1"],
+            "TypOddzialu": ["ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, fizyka, język angielski"],
+            "PierwszyJezykObcy": ["język angielski"],
+            "DrugiJezykObcy": ["język niemiecki"],
+        }
+    )
+    thresholds = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1B [O] mat-fiz (ang-niem)"],
+            "SymbolOddzialu": ["1B"],
+            "Prog_min_klasa": [148],
+            "threshold_year": [2025],
+            "threshold_kind": ["reference"],
+            "threshold_priority": [1],
+            "threshold_label": ["progi referencyjne 2025"],
+        }
+    )
+
+    matches, selected = match_reference_thresholds(classes, thresholds)
+
+    assert selected.iloc[0]["match_status"] == "approximate"
+    assert bool(matches.iloc[0]["used_for_scoring"]) is True
+
+
+def test_match_reference_thresholds_keeps_uncertain_tie_as_candidate_only():
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "source_class_id": ["pzo:103"],
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1X - (O) - mat, fiz (ang - niem)"],
+            "OddzialKod": ["1X"],
+            "TypOddzialu": ["ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, fizyka"],
+            "PierwszyJezykObcy": ["język angielski"],
+            "DrugiJezykObcy": ["język niemiecki"],
+        }
+    )
+    thresholds = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_1"],
+            "OddzialNazwa": [
+                "1A [O] mat-fiz (ang-niem)",
+                "1B [O] mat-fiz (ang-niem)",
+            ],
+            "SymbolOddzialu": ["1A", "1B"],
+            "Prog_min_klasa": [150, 151],
+            "threshold_year": [2025, 2025],
+            "threshold_kind": ["reference", "reference"],
+            "threshold_priority": [1, 1],
+            "threshold_label": ["progi referencyjne 2025", "progi referencyjne 2025"],
+        }
+    )
+
+    matches, selected = match_reference_thresholds(classes, thresholds)
+
+    assert selected.empty
+    assert set(matches["match_status"]) == {"candidate_only"}
+
+
+def test_match_reference_thresholds_prefers_profile_over_reused_code():
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "source_class_id": ["pzo:104"],
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1E1 - (O) - mat, geo, ang (ang - niem)"],
+            "OddzialKod": ["1E1"],
+            "TypOddzialu": ["ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, geografia, język angielski"],
+            "PierwszyJezykObcy": ["język angielski"],
+            "DrugiJezykObcy": ["język niemiecki"],
+        }
+    )
+    thresholds = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_1"],
+            "OddzialNazwa": [
+                "1E1 [O] biol-chem-mat (ang-niem)",
+                "1C1 [O] geogr-ang-mat (ang-niem)",
+            ],
+            "SymbolOddzialu": ["1E1", "1C1"],
+            "Prog_min_klasa": [167.95, 169.15],
+            "threshold_year": [2025, 2025],
+            "threshold_kind": ["reference", "reference"],
+            "threshold_priority": [1, 1],
+            "threshold_label": ["progi referencyjne 2025", "progi referencyjne 2025"],
+        }
+    )
+
+    matches, selected = match_reference_thresholds(classes, thresholds)
+
+    assert selected.iloc[0]["OldOddzialNazwa"] == "1C1 [O] geogr-ang-mat (ang-niem)"
+    assert selected.iloc[0]["Prog_min_klasa"] == 169.15
+    assert selected.iloc[0]["match_status"] == "approximate"
+    first_two = matches.sort_values("candidate_rank").head(2)
+    assert first_two.iloc[0]["match_method"].startswith("profile_exact")
+
+
+def test_match_reference_thresholds_allows_same_profile_with_different_second_language():
+    classes = pd.DataFrame(
+        {
+            "source_school_id": ["pzo:1"],
+            "source_class_id": ["pzo:105"],
+            "SzkolaIdentyfikator": ["lo_1"],
+            "OddzialNazwa": ["1B2 - (O) - mat, fiz, ang (ang - hisz)"],
+            "OddzialKod": ["1B2"],
+            "TypOddzialu": ["ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, fizyka, język angielski"],
+            "PierwszyJezykObcy": ["język angielski"],
+            "DrugiJezykObcy": ["język hiszpański"],
+        }
+    )
+    thresholds = pd.DataFrame(
+        {
+            "SzkolaIdentyfikator": ["lo_1", "lo_1"],
+            "OddzialNazwa": [
+                "1B1 [O] fiz-ang-mat (ang-niem)",
+                "1B2 [O] fiz-inf-mat (ang-niem)",
+            ],
+            "SymbolOddzialu": ["1B1", "1B2"],
+            "Prog_min_klasa": [169.75, 167.65],
+            "threshold_year": [2025, 2025],
+            "threshold_kind": ["reference", "reference"],
+            "threshold_priority": [1, 1],
+            "threshold_label": ["progi referencyjne 2025", "progi referencyjne 2025"],
+        }
+    )
+
+    matches, selected = match_reference_thresholds(classes, thresholds)
+
+    assert selected.iloc[0]["OldOddzialNazwa"] == "1B1 [O] fiz-ang-mat (ang-niem)"
+    assert selected.iloc[0]["match_status"] == "approximate"
+    assert bool(matches.sort_values("candidate_rank").iloc[0]["used_for_scoring"])
+
+
+def test_parse_and_summarize_pzo_criteria_subjects():
+    parsed = parse_pointed_subjects(
+        "Pierwszy punktowany przedmiot: język polski "
+        "Drugi punktowany przedmiot: matematyka "
+        "Trzeci punktowany przedmiot : fizyka "
+        "Czwarty punktowany przedmiot: język angielski"
+    )
+    assert parsed == {
+        "Punktowany1": "język polski",
+        "Punktowany2": "matematyka",
+        "Punktowany3": "fizyka",
+        "Punktowany4": "język angielski",
+    }
+
+    criteria = pd.DataFrame(
+        {
+            "source_class_id": ["pzo:1", "pzo:1"],
+            "group_header_text": [
+                "Pierwszy punktowany przedmiot: język polski Drugi punktowany przedmiot: matematyka",
+                "",
+            ],
+            "display_value_text": [
+                "Trzeci punktowany przedmiot : fizyka",
+                "Czwarty punktowany przedmiot : język angielski",
+            ],
+        }
+    )
+    result = summarize_criteria(criteria)
+
+    assert result.iloc[0]["PrzedmiotyPunktowane"] == (
+        "język polski, matematyka, fizyka, język angielski"
+    )
 
 
 def test_merge_existing_year_sheets_preserves_other_years_and_year_rank():
