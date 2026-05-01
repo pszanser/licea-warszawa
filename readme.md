@@ -16,6 +16,8 @@ Posty na LinkedIn o procesie tworzenia:
 [2 - Excel -> Asystent AI](https://www.linkedin.com/posts/pszanser_asystent-ai-do-wyboru-liceum-w-warszawie-activity-7328660490576990209-5mo8)  
 [3 - Excel -> Aplikacja z mapą](https://www.linkedin.com/posts/pszanser_liceum-edukacja-warszawa-activity-7328808246729658368-sw5m)  
 [4 - Otwarty projekt](https://www.linkedin.com/posts/pszanser_github-opensource-python-activity-7330834756634411009-2hCz)  
+[5 - Aktualizacja danych 2025](https://www.linkedin.com/posts/pszanser_rok-temu-zrobi%C5%82em-narz%C4%99dzie-%C5%BCeby-pom%C3%B3c-synowi-activity-7453658959212666880-XR5I)  
+[6 - Aktualizacja o ofertę 2026 i nowe funkcje](https://www.linkedin.com/posts/pszanser_edukacja-warszawa-liceum-activity-7455617098636070912-j3Gz)  
 
 Zapytaj Devina o to repozytorium:  
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pszanser/licea-warszawa)
