@@ -2,6 +2,12 @@
 
 Krótka historia zmian w aplikacji. Najnowsze wpisy są na górze.
 
+## 2026-05-01 - Filtry języków obcych
+
+### Nowe
+
+- Dodano filtrowanie klas po pierwszym i drugim języku obcym oraz poziomie języka, jeśli takie dane są dostępne.
+
 ## 2026-04-30 - Oficjalna oferta 2026/2027
 
 ### Nowe
