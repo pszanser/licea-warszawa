@@ -88,8 +88,24 @@ def test_get_language_filter_options_from_dataframe_reads_normalized_columns():
 
     assert result["first_languages"] == ["angielski", "hiszpański", "niemiecki"]
     assert result["second_languages"] == ["francuski", "niemiecki"]
-    assert result["first_levels"] == ["bez oznaczenia", "kontynuacja"]
+    assert result["first_levels"] == ["kontynuacja"]
     assert result["second_levels"] == ["kontynuacja", "od podstaw"]
+
+
+def test_get_language_filter_options_hides_unmarked_language_level():
+    classes = pd.DataFrame(
+        {
+            "JezykiPierwszeNorm": ["angielski", "niemiecki"],
+            "JezykiDrugieNorm": ["niemiecki", "hiszpański"],
+            "JezykiPierwszePoziomy": ["bez oznaczenia", "bez oznaczenia"],
+            "JezykiDrugiePoziomy": ["bez oznaczenia", "bez oznaczenia"],
+        }
+    )
+
+    result = get_language_filter_options_from_dataframe(classes)
+
+    assert result["first_levels"] == []
+    assert result["second_levels"] == []
 
 
 def test_apply_filters_to_classes_matches_language_and_level_as_one_option():

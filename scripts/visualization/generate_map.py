@@ -590,6 +590,10 @@ def split_semicolon_values(value: Any) -> set[str]:
     return {part.strip() for part in str(value).split(";") if part and part.strip()}
 
 
+def visible_language_levels(values: set[str]) -> set[str]:
+    return {value for value in values if value != "bez oznaczenia"}
+
+
 def get_language_filter_options_from_dataframe(
     df: pd.DataFrame,
 ) -> dict[str, list[str]]:
@@ -612,6 +616,8 @@ def get_language_filter_options_from_dataframe(
             for _, row in df.iterrows():
                 options = language_options_for_row(row).get(slot, ())
                 values.update(option[item_index] for option in options)
+        if "levels" in key:
+            values = visible_language_levels(values)
         result[key] = sorted(values)
     return result
 
