@@ -416,8 +416,19 @@ def parse_legacy_language_slots(
 
     first_text = ""
     second_text = ""
-    first_match = re.search(r"(?:^|\b)1\s*:\s*(.*?)(?=\b2\s*:|$)", text, re.I)
-    second_match = re.search(r"(?:^|\b)2\s*:\s*(.*?)(?=\b3\s*:|$)", text, re.I)
+    first_label = r"(?:1|pierwszy)"
+    second_label = r"(?:2|drugi)"
+    third_label = r"(?:3|trzeci)"
+    first_match = re.search(
+        rf"(?:^|\b){first_label}\s*:\s*(.*?)(?=\b{second_label}\s*:|$)",
+        text,
+        re.I,
+    )
+    second_match = re.search(
+        rf"(?:^|\b){second_label}\s*:\s*(.*?)(?=\b{third_label}\s*:|$)",
+        text,
+        re.I,
+    )
     if first_match:
         first_text = first_match.group(1)
     if second_match:

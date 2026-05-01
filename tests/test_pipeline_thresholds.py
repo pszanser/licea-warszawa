@@ -332,6 +332,25 @@ def test_language_parser_reads_legacy_first_and_second_language_slots():
     )
 
 
+def test_language_parser_reads_vulcan_legacy_word_labels():
+    row = pd.Series(
+        {
+            "OddzialNazwa": "1Bf [O] fiz-ang-mat (ang-hisz*,niem*)",
+            "JezykiObce": (
+                "Pierwszy: język angielski " "Drugi: język hiszpański, język niemiecki"
+            ),
+        }
+    )
+
+    options = language_options_for_row(row)
+
+    assert options["first"] == (("angielski", "bez oznaczenia"),)
+    assert options["second"] == (
+        ("hiszpański", "bez oznaczenia"),
+        ("niemiecki", "bez oznaczenia"),
+    )
+
+
 def test_load_thresholds_without_sources_returns_merge_schema():
     result = load_thresholds({"year": 2027, "admission_year": 2027})
 
