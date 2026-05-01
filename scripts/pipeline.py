@@ -236,7 +236,6 @@ LANGUAGE_DISPLAY_BY_TOKEN = {
 LANGUAGE_TOKEN_BY_DISPLAY = {
     display: token for token, display in LANGUAGE_DISPLAY_BY_TOKEN.items()
 }
-LANGUAGE_LEVELS = ("dwujęzyczny", "kontynuacja", "od podstaw", "bez oznaczenia")
 
 CLASS_TYPE_ALIASES = {
     "ogolnodostepny": "O",
@@ -473,6 +472,18 @@ def parse_class_name_language_slots(
 
 
 def language_options_for_row(row: pd.Series) -> dict[str, tuple[tuple[str, str], ...]]:
+    """Zwraca języki klasy jako sloty first/second/all z parami (język, poziom).
+
+    Parser korzysta z pól `PierwszyJezykObcy`, `DrugiJezykObcy`, `JezykiObce`,
+    `JezykiObceIkonyOpis` i `OddzialNazwa`. Kolejność wyboru dla pierwszego i
+    drugiego slotu to: jawne kolumny pierwszego/drugiego języka, legacy sloty
+    z `JezykiObce`, a potem języki odczytane z nazwy oddziału. Dla pierwszego
+    slotu dodatkowym fallbackiem są ikony z poziomem dwujęzycznym.
+
+    Klucz `all` jest deduplikowaną unią `first`, `second`, opcji ikon,
+    opcji legacy i opcji z nazwy oddziału. Deduplikacja zachowuje pierwszą
+    napotkaną kolejność, więc wcześniejsze źródła mają pierwszeństwo.
+    """
     first = list(parse_language_option_list(row.get("PierwszyJezykObcy")))
     second = list(parse_language_option_list(row.get("DrugiJezykObcy")))
     legacy_first, legacy_second, legacy_all = parse_legacy_language_slots(
@@ -512,6 +523,7 @@ def language_pair_values(options: tuple[tuple[str, str], ...]) -> str:
 
 
 def normalized_language_columns(row: pd.Series) -> dict[str, str]:
+    """Mapuje sloty językowe klasy na kolumny języków, poziomów i opcji."""
     options = language_options_for_row(row)
     return {
         "JezykiPierwszeNorm": language_display_values(options["first"], "language"),
