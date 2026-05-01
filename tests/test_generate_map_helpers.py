@@ -6,11 +6,13 @@ import pandas as pd
 from scripts.visualization.generate_map import (
     add_school_markers_to_map,
     aggregate_filtered_class_data,
+    apply_filters_to_classes,
     build_legacy_threshold_display_table,
     build_offer_2026_display_table,
     find_school_by_map_point,
     format_ranking_history_for_display,
     get_default_year,
+    get_language_filter_options_from_dataframe,
     get_subjects_from_dataframe,
     select_school_classes_for_year,
 )
@@ -63,11 +65,63 @@ def test_get_subjects_from_dataframe_skips_empty_binary_columns():
         {
             "matematyka": [0, 1],
             "biologia": [0, 0],
+            "JezykiPierwszeNorm": ["angielski", "niemiecki"],
+            "JezykiDrugiePoziomy": ["od podstaw", "kontynuacja"],
             "IdSzkoly": [pd.NA, pd.NA],
         }
     )
 
     assert get_subjects_from_dataframe(classes) == ["matematyka"]
+
+
+def test_get_language_filter_options_from_dataframe_reads_normalized_columns():
+    classes = pd.DataFrame(
+        {
+            "JezykiPierwszeNorm": ["angielski", "niemiecki; hiszpański"],
+            "JezykiDrugieNorm": ["niemiecki", "francuski"],
+            "JezykiPierwszePoziomy": ["kontynuacja", "bez oznaczenia"],
+            "JezykiDrugiePoziomy": ["od podstaw", "kontynuacja"],
+        }
+    )
+
+    result = get_language_filter_options_from_dataframe(classes)
+
+    assert result["first_languages"] == ["angielski", "hiszpański", "niemiecki"]
+    assert result["second_languages"] == ["francuski", "niemiecki"]
+    assert result["first_levels"] == ["bez oznaczenia", "kontynuacja"]
+    assert result["second_levels"] == ["kontynuacja", "od podstaw"]
+
+
+def test_apply_filters_to_classes_matches_language_and_level_as_one_option():
+    classes = pd.DataFrame(
+        {
+            "OddzialNazwa": ["1A", "1B"],
+            "PrzedmiotyRozszerzone": ["matematyka", "matematyka"],
+            "JezykiObce": ["", ""],
+            "PierwszyJezykObcy": [
+                "język angielski kontynuacja",
+                "język angielski od podstaw",
+            ],
+            "DrugiJezykObcy": [
+                "język niemiecki od podstaw, język hiszpański kontynuacja",
+                "język niemiecki kontynuacja, język hiszpański od podstaw",
+            ],
+            "JezykiObceIkonyOpis": ["", ""],
+        }
+    )
+
+    result = apply_filters_to_classes(
+        classes,
+        wanted_subjects=None,
+        avoided_subjects=None,
+        max_ranking_poz=None,
+        min_class_points=None,
+        max_class_points=None,
+        second_languages=["niemiecki"],
+        second_language_levels=["od podstaw"],
+    )
+
+    assert result["OddzialNazwa"].tolist() == ["1A"]
 
 
 def test_select_school_classes_for_year_uses_school_identifier_and_year():

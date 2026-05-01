@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from scripts.pipeline import extract_class_type
+from scripts.pipeline import language_options_for_row
 
 RESULTS_DIR = ROOT / "results"
 APP_DATA_FILE = RESULTS_DIR / "app" / "licea_warszawa.xlsx"
@@ -567,8 +568,6 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
             "Prog_szkola_threshold_label",
             "Progi_historyczne_szkola",
             "Progi_historyczne_lata",
-            "LiczbaOddzialowPlan",
-            "LiczbaMiejscPlan",
         ]
     ]
     subject_cols = []
@@ -580,6 +579,60 @@ def get_subjects_from_dataframe(df: pd.DataFrame) -> list[str]:
     return sorted(subject_cols)
 
 
+def split_semicolon_values(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    try:
+        if pd.isna(value):
+            return set()
+    except (TypeError, ValueError):
+        pass
+    return {part.strip() for part in str(value).split(";") if part and part.strip()}
+
+
+def get_language_filter_options_from_dataframe(
+    df: pd.DataFrame,
+) -> dict[str, list[str]]:
+    """Zwraca dostępne języki i poziomy na podstawie znormalizowanych kolumn."""
+    config = {
+        "first_languages": "JezykiPierwszeNorm",
+        "second_languages": "JezykiDrugieNorm",
+        "first_levels": "JezykiPierwszePoziomy",
+        "second_levels": "JezykiDrugiePoziomy",
+    }
+    result: dict[str, list[str]] = {}
+    for key, column in config.items():
+        values: set[str] = set()
+        if column in df.columns:
+            for value in df[column].dropna():
+                values.update(split_semicolon_values(value))
+        if not values and not df.empty:
+            slot = "first" if "first" in key else "second"
+            item_index = 0 if "languages" in key else 1
+            for _, row in df.iterrows():
+                options = language_options_for_row(row).get(slot, ())
+                values.update(option[item_index] for option in options)
+        result[key] = sorted(values)
+    return result
+
+
+def language_filter_matches(
+    row: pd.Series,
+    slot: str,
+    languages: list[str] | None = None,
+    levels: list[str] | None = None,
+) -> bool:
+    if not languages and not levels:
+        return True
+    options = language_options_for_row(row).get(slot, ())
+    for language, level in options:
+        language_ok = not languages or language in languages
+        level_ok = not levels or level in levels
+        if language_ok and level_ok:
+            return True
+    return False
+
+
 def apply_filters_to_classes(
     df_classes_raw: pd.DataFrame,
     wanted_subjects: list[str] | None,
@@ -588,6 +641,10 @@ def apply_filters_to_classes(
     min_class_points: float | None,
     max_class_points: float | None,
     allowed_class_types: list[str] | None = None,
+    first_languages: list[str] | None = None,
+    first_language_levels: list[str] | None = None,
+    second_languages: list[str] | None = None,
+    second_language_levels: list[str] | None = None,
     report_warning_callback: Callable[[str], Any] = print,
 ) -> pd.DataFrame:
     """
@@ -652,6 +709,26 @@ def apply_filters_to_classes(
             report_warning_callback(
                 "Kolumna 'TypOddzialu' nie znaleziona w danych do filtrowania typu oddziału."
             )
+
+    if (first_languages or first_language_levels) and not df_filtered.empty:
+        df_filtered = df_filtered[
+            df_filtered.apply(
+                lambda row: language_filter_matches(
+                    row, "first", first_languages, first_language_levels
+                ),
+                axis=1,
+            )
+        ]
+
+    if (second_languages or second_language_levels) and not df_filtered.empty:
+        df_filtered = df_filtered[
+            df_filtered.apply(
+                lambda row: language_filter_matches(
+                    row, "second", second_languages, second_language_levels
+                ),
+                axis=1,
+            )
+        ]
 
     return df_filtered
 

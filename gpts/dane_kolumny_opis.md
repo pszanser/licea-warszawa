@@ -69,6 +69,8 @@ Główna tabela klas/oddziałów, używana w wynikach, filtrach, mapie i scoring
 | `Zawod`, `DyscyplinaSportowa` | Informacje dla techników, branżowych albo klas sportowych. |
 | `JezykiObce`, `PierwszyJezykObcy`, `DrugiJezykObcy` | Języki obce w formie tekstowej. |
 | `JezykiObceIkony`, `JezykiObceIkonyOpis` | Techniczne/ikonowe oznaczenia języków z PZO. |
+| `JezykiPierwszeNorm`, `JezykiDrugieNorm`, `JezykiWszystkieNorm` | Znormalizowane języki do filtrów, rozdzielone `; `. |
+| `JezykiPierwszePoziomy`, `JezykiDrugiePoziomy`, `JezykiWszystkiePoziomy` | Poziomy języków, np. `kontynuacja`, `od podstaw`, `dwujęzyczny`. |
 | `Prog_min_klasa` | Próg użyty dla klasy: dla 2026 jest to próg referencyjny z dopasowania do 2025/2024. |
 | `ProgUsedLevel` | Czytelny status progu, np. `klasowy 2025 - dokładny`. |
 | `ProgMatchStatus`, `ProgMatchScore`, `ProgMatchOldClass` | Informacje o dopasowaniu obecnej klasy do historycznej klasy. |
@@ -117,11 +119,6 @@ szkole oraz do historii rankingu.
 Historyczne progi punktowe z plików źródłowych. Dla 2026 pełnią rolę progów
 referencyjnych, nie faktycznych progów rekrutacji 2026.
 
-#### `plan_naboru`
-
-Starszy arkusz planu naboru. Może być pusty w aktualnym trybie 2026, bo głównym
-źródłem oferty 2026 jest PZO/Omikron.
-
 ### Zasady analizy dla LLM
 
 * Rok 2025 traktuj jako historyczne pełne dane z Vulcan i faktyczne progi 2025.
@@ -130,6 +127,8 @@ Starszy arkusz planu naboru. Może być pusty w aktualnym trybie 2026, bo głów
   `ProgUsedLevel`.
 * Do filtrowania przedmiotów używaj kolumn binarnych 0/1 albo tekstu z
   `PrzedmiotyRozszerzone`.
+* Do filtrowania języków używaj znormalizowanych kolumn `Jezyki*Norm` i
+  `Jezyki*Poziomy`, nie kolumn przedmiotowych typu `angielski`.
 * Do szczegółów szkoły używaj `school_details`, a do szczegółów klasy
   `class_details`.
 * Do wyjaśniania progu klasy 2026 używaj `threshold_matches` i pól
