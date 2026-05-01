@@ -31,6 +31,10 @@ FILTER_LABELS = {
     "class_types": "Wybierz typy oddziałów:",
     "wanted_subjects": "Wybierz poszukiwane przedmioty:",
     "avoided_subjects": "Wybierz unikane przedmioty:",
+    "first_languages": "Pierwszy język:",
+    "first_language_levels": "Poziom pierwszego języka:",
+    "second_languages": "Drugi język:",
+    "second_language_levels": "Poziom drugiego języka:",
     "points_range": "Zakres progów minimalnych:",
     "show_heatmap": "Pokaż mapę cieplną szkół",
 }
@@ -43,6 +47,10 @@ FILTER_HELPS = {
     "class_types": "np. ogólny [O] lub dwujęzyczny [D]/[DW]",
     "wanted_subjects": "Klasa musi je oferować",
     "avoided_subjects": "Klasa nie może ich mieć",
+    "first_languages": "Klasa musi oferować wybrany pierwszy język",
+    "first_language_levels": "Działa tylko dla roczników z informacją o poziomie",
+    "second_languages": "Klasa musi oferować wybrany drugi język",
+    "second_language_levels": "Działa tylko dla roczników z informacją o poziomie",
     "points_range": "Wybierz dolny i górny próg",
     "show_heatmap": "Zobacz zagęszczenie placówek",
 }
@@ -53,6 +61,10 @@ FILTER_DEFAULTS = {
     "class_types": [],
     "wanted_subjects": [],
     "avoided_subjects": [],
+    "first_languages": [],
+    "first_language_levels": [],
+    "second_languages": [],
+    "second_language_levels": [],
     "show_heatmap": False,
     # Uwaga: ranking_top i points_range nie są tutaj — Streamlit nadaje im
     # początkową wartość z konstruktora widgetu (selectbox `index=0`,
@@ -88,6 +100,7 @@ from visualization.generate_map import (
     load_school_data,
     load_classes_data,
     get_subjects_from_dataframe,
+    get_language_filter_options_from_dataframe,
     apply_filters_to_classes,
     aggregate_filtered_class_data,
     add_school_markers_to_map,
@@ -1502,6 +1515,7 @@ dopasowania).
         st.caption(f"Rok danych: **{selected_year}** · status: **{status_label}**")
 
     available_subjects = get_subjects_from_dataframe(df_classes_raw)
+    available_languages = get_language_filter_options_from_dataframe(df_classes_raw)
     available_class_types = (
         sorted(df_classes_raw["TypOddzialu"].dropna().unique())
         if "TypOddzialu" in df_classes_raw.columns
@@ -1522,6 +1536,10 @@ dopasowania).
                 "class_types",
                 "wanted_subjects",
                 "avoided_subjects",
+                "first_languages",
+                "first_language_levels",
+                "second_languages",
+                "second_language_levels",
                 "show_heatmap",
                 "points_range",
                 "viz_selected_charts",
@@ -1624,6 +1642,43 @@ dopasowania).
             help=FILTER_HELPS["avoided_subjects"],
         )
 
+        st.subheader("Języki obce")
+        selected_first_languages = st.multiselect(
+            FILTER_LABELS["first_languages"],
+            available_languages.get("first_languages", []),
+            placeholder="Wybierz...",
+            key="first_languages",
+            help=FILTER_HELPS["first_languages"],
+        )
+        if available_languages.get("first_levels"):
+            selected_first_language_levels = st.multiselect(
+                FILTER_LABELS["first_language_levels"],
+                available_languages.get("first_levels", []),
+                placeholder="Wybierz...",
+                key="first_language_levels",
+                help=FILTER_HELPS["first_language_levels"],
+            )
+        else:
+            selected_first_language_levels = []
+
+        selected_second_languages = st.multiselect(
+            FILTER_LABELS["second_languages"],
+            available_languages.get("second_languages", []),
+            placeholder="Wybierz...",
+            key="second_languages",
+            help=FILTER_HELPS["second_languages"],
+        )
+        if available_languages.get("second_levels"):
+            selected_second_language_levels = st.multiselect(
+                FILTER_LABELS["second_language_levels"],
+                available_languages.get("second_levels", []),
+                placeholder="Wybierz...",
+                key="second_language_levels",
+                help=FILTER_HELPS["second_language_levels"],
+            )
+        else:
+            selected_second_language_levels = []
+
         progi_label = "Progi punktowe szkoły"
         if pd.notna(threshold_label) and str(threshold_label).strip():
             progi_label = f"{progi_label} ({threshold_label})"
@@ -1701,6 +1756,10 @@ dopasowania).
         min_class_points=min_class_points_filter,
         max_class_points=max_class_points_filter,
         allowed_class_types=selected_class_types,
+        first_languages=selected_first_languages,
+        first_language_levels=selected_first_language_levels,
+        second_languages=selected_second_languages,
+        second_language_levels=selected_second_language_levels,
         report_warning_callback=st.warning,
     )
 
@@ -1714,6 +1773,10 @@ dopasowania).
             bool(selected_school_types),
             bool(selected_class_types),
             bool(selected_school_names),
+            bool(selected_first_languages),
+            bool(selected_first_language_levels),
+            bool(selected_second_languages),
+            bool(selected_second_language_levels),
         ]
     )
 
@@ -1745,6 +1808,18 @@ dopasowania).
     if avoided_subjects_filter:
         filter_entries.append(
             ("Rozszerzenia - unikane", ", ".join(avoided_subjects_filter))
+        )
+    if selected_first_languages:
+        filter_entries.append(("Pierwszy język", ", ".join(selected_first_languages)))
+    if selected_first_language_levels:
+        filter_entries.append(
+            ("Poziom pierwszego języka", ", ".join(selected_first_language_levels))
+        )
+    if selected_second_languages:
+        filter_entries.append(("Drugi język", ", ".join(selected_second_languages)))
+    if selected_second_language_levels:
+        filter_entries.append(
+            ("Poziom drugiego języka", ", ".join(selected_second_language_levels))
         )
     if max_ranking_poz_filter is not None:
         filter_entries.append(

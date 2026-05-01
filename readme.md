@@ -1,9 +1,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/pszanser/licea-warszawa/pulls) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/pszanser/licea-warszawa?utm_source=oss&utm_medium=github&utm_campaign=pszanser%2Flicea-warszawa&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 # Projekt: Wybór szkoły średniej w Warszawie i okolicach
-Ten projekt służy do pobrania informacji o liceach, technikach i szkołach branżowych z systemu Vulcan,
-połączenia z danymi o progach punktowych z poprzednich lat,
-rankingiem Perspektyw, wyliczenia czasu dojazdu z Google Maps komunikacją miejską
-oraz generowania różnorodnych wizualizacji ułatwiających analizę.
+Ten projekt pomaga rodzicom i uczniom porównywać licea, technika i szkoły branżowe
+w Warszawie i okolicach. Łączy historyczne dane oferty 2025 z systemu Vulcan,
+aktualną oficjalną ofertę 2026/2027 z PZO/Omikron, progi punktowe z poprzednich
+lat, ranking Perspektyw, języki obce, rozszerzenia oraz czasy dojazdu komunikacją
+miejską z Google Maps. Wyniki są dostępne jako aplikacja Streamlit, plik Excel,
+mapa i zestaw wizualizacji.
 
 **Interaktywna mapa** i wizualizacje są dostępne na https://licea-warszawa.streamlit.app/
 
@@ -14,6 +16,8 @@ Posty na LinkedIn o procesie tworzenia:
 [2 - Excel -> Asystent AI](https://www.linkedin.com/posts/pszanser_asystent-ai-do-wyboru-liceum-w-warszawie-activity-7328660490576990209-5mo8)  
 [3 - Excel -> Aplikacja z mapą](https://www.linkedin.com/posts/pszanser_liceum-edukacja-warszawa-activity-7328808246729658368-sw5m)  
 [4 - Otwarty projekt](https://www.linkedin.com/posts/pszanser_github-opensource-python-activity-7330834756634411009-2hCz)  
+[5 - Aktualizacja danych 2025](https://www.linkedin.com/posts/pszanser_rok-temu-zrobi%C5%82em-narz%C4%99dzie-%C5%BCeby-pom%C3%B3c-synowi-activity-7453658959212666880-XR5I)  
+[6 - Aktualizacja o ofertę 2026 i nowe funkcje](https://www.linkedin.com/posts/pszanser_edukacja-warszawa-liceum-activity-7455617098636070912-j3Gz)  
 
 Zapytaj Devina o to repozytorium:  
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pszanser/licea-warszawa)
@@ -94,8 +98,8 @@ results/app/licea_warszawa.xlsx
 ```
 
 Plik zawiera arkusze `metadata`, `quality`, `schools`, `classes`, `rankings`,
-`thresholds`, `plan_naboru`, `school_details`, `class_details` i
-`threshold_matches`. Kluczowe kolumny roczne to:
+`thresholds`, `school_details`, `class_details` i `threshold_matches`.
+Kluczowe kolumny roczne to:
 
 *   `year` - rok danych prezentowanych w aplikacji, np. `2026`.
 *   `admission_year` - rok rekrutacji/oferty, np. `2026`.
@@ -109,6 +113,8 @@ Plik zawiera arkusze `metadata`, `quality`, `schools`, `classes`, `rankings`,
 *   `Ranking_historyczny_szkola` - lista znanych pozycji rankingowych szkoły według lat, pokazywana w szczegółach szkoły.
 *   `source_class_id` - trwały identyfikator klasy/oddziału z konkretnego źródła danych.
 *   `ProgUsedLevel` - opis, czy próg w aplikacji jest dokładnym/przybliżonym dopasowaniem klasy 2025, czy fallbackiem szkolnym.
+*   `JezykiPierwszeNorm` / `JezykiDrugieNorm` - znormalizowane języki obce do filtrowania.
+*   `JezykiPierwszePoziomy` / `JezykiDrugiePoziomy` - poziom języka, np. kontynuacja, od podstaw albo dwujęzyczny.
 
 Źródła dla kolejnych lat są opisane w `scripts/config/data_sources.yml`. Obecnie:
 
@@ -192,7 +198,6 @@ python scripts/main.py --year 2026
 *   **Parsowanie rankingu Perspektyw:** Ekstrakcja danych z HTML/JS rankingu, z fallbackiem do PDF
 *   **Wczytywanie progów punktowych:** Integracja z historycznymi danymi o progach w różnych formatach Excela
 *   **Oficjalna oferta 2026:** Wczytywanie publicznej oferty PZO/Omikron, w tym adresów, współrzędnych, kontaktów, opisów szkół i klas, języków, rozszerzeń oraz kryteriów punktowanych
-*   **Plan naboru:** Obsługa planu naboru pozostaje dostępna jako starszy typ źródła danych
 *   **Obliczanie czasów dojazdu:** Precyzyjne geokodowanie i kalkulacja czasu podróży przez Google Maps API
 *   **Scoring:** Opcjonalny złożony wskaźnik oceny szkół
 
@@ -204,7 +209,7 @@ python scripts/main.py --year 2026
 ### Interaktywna aplikacja Streamlit
 Zaawansowana aplikacja webowa z:
 *   **Przewodnikiem dla nowych użytkowników:** krótki onboarding w aplikacji dostępny jako zwijany panel pomocy
-*   **Rozbudowanym panelem filtrów:** typ szkoły, ranking, nazwy, typy oddziałów, przedmioty rozszerzone, progi punktowe
+*   **Rozbudowanym panelem filtrów:** typ szkoły, ranking, nazwy, typy oddziałów, przedmioty rozszerzone, języki obce i progi punktowe
 *   **Przyciskiem resetowania** wszystkich filtrów oraz stanu zakładki "Moje dopasowanie"
 *   **Trzema zakładkami: "Mapa", "Moje dopasowanie" i "Wizualizacje"** dla lepszej organizacji
 *   **Personalizowanym dopasowaniem (FitScore):** ważony scoring szkół po rankingu, marginesie do progu i odległości od punktu startowego (klik na mapie / środek widoku / adres z geokodowania Google). Jeśli dla ważonej składowej brakuje danych, np. rankingu albo progu, składowa liczy się jako `0` i jest pokazana w kolumnie **Braki danych**.

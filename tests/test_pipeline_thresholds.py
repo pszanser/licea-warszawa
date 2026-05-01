@@ -15,6 +15,7 @@ from scripts.pipeline import (
     historical_school_thresholds,
     load_pzo_offer_tables,
     load_thresholds,
+    language_options_for_row,
     match_reference_thresholds,
     merge_existing_year_sheets,
     parse_pointed_subjects,
@@ -269,6 +270,85 @@ def test_add_common_class_columns_preserves_existing_class_type():
     result = add_common_class_columns(classes)
 
     assert result["TypOddzialu"].tolist() == ["O", "D"]
+
+
+def test_add_common_class_columns_normalizes_pzo_language_slots_and_levels():
+    classes = pd.DataFrame(
+        {
+            "OddzialNazwa": ["1Af - (O) - mat, geo, ang (ang (K) - fr (P))"],
+            "TypOddzialu": ["ogólnodostępny"],
+            "PrzedmiotyRozszerzone": ["matematyka, geografia, język angielski"],
+            "PierwszyJezykObcy": ["język angielski kontynuacja"],
+            "DrugiJezykObcy": ["język francuski od podstaw, język niemiecki"],
+            "JezykiObceIkonyOpis": [
+                "język angielski kontynuacja, język francuski od podstaw, język niemiecki"
+            ],
+        }
+    )
+
+    result = add_common_class_columns(classes)
+    row = result.iloc[0]
+
+    assert row["JezykiPierwszeNorm"] == "angielski"
+    assert row["JezykiPierwszePoziomy"] == "kontynuacja"
+    assert row["JezykiDrugieNorm"] == "francuski; niemiecki"
+    assert row["JezykiDrugiePoziomy"] == "od podstaw; bez oznaczenia"
+    assert row["JezykiWszystkieNorm"] == "angielski; francuski; niemiecki"
+
+
+def test_language_parser_uses_icons_for_bilingual_first_language():
+    row = pd.Series(
+        {
+            "OddzialNazwa": "1BHdw - (D) - mat, biz, geo (ang*D - hisz (P))",
+            "PierwszyJezykObcy": "",
+            "DrugiJezykObcy": "język hiszpański od podstaw",
+            "JezykiObce": " hiszpański od podstaw",
+            "JezykiObceIkonyOpis": (
+                "język angielski poziom dwujęzyczny, język hiszpański od podstaw"
+            ),
+        }
+    )
+
+    options = language_options_for_row(row)
+
+    assert options["first"] == (("angielski", "dwujęzyczny"),)
+    assert ("hiszpański", "od podstaw") in options["second"]
+
+
+def test_language_parser_reads_legacy_first_and_second_language_slots():
+    row = pd.Series(
+        {
+            "OddzialNazwa": "1A [O] mat-fiz (ang-niem)",
+            "JezykiObce": "1: angielski 2: niemiecki, rosyjski",
+        }
+    )
+
+    options = language_options_for_row(row)
+
+    assert options["first"] == (("angielski", "bez oznaczenia"),)
+    assert options["second"] == (
+        ("niemiecki", "bez oznaczenia"),
+        ("rosyjski", "bez oznaczenia"),
+    )
+
+
+def test_language_parser_reads_vulcan_legacy_word_labels():
+    row = pd.Series(
+        {
+            "OddzialNazwa": "1Bf [O] fiz-ang-mat (ang-hisz*,niem*)",
+            "JezykiObce": (
+                "Pierwszy: język angielski " "Drugi: język hiszpański, język niemiecki"
+            ),
+        }
+    )
+
+    options = language_options_for_row(row)
+
+    assert options["first"] == (("angielski", "bez oznaczenia"),)
+    assert options["second"] == (
+        ("hiszpański", "bez oznaczenia"),
+        ("niemiecki", "bez oznaczenia"),
+    )
 
 
 def test_load_thresholds_without_sources_returns_merge_schema():

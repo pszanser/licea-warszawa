@@ -23,7 +23,6 @@ from scripts.api_clients.googlemaps_api import (
 )
 from scripts.config.constants import ALL_SUBJECTS
 from scripts.data_processing.load_minimum_points import load_min_points
-from scripts.data_processing.load_plan_naboru import load_plan_naboru
 from scripts.data_processing.get_data_pzo_omikron import (
     DEFAULT_BASE_URL as PZO_BASE_URL,
     DEFAULT_PUBLIC_CONTEXT as PZO_PUBLIC_CONTEXT,
@@ -174,33 +173,68 @@ SUBJECT_MATCH_ALIASES = {
 }
 
 LANGUAGE_MATCH_ALIASES = {
+    "język angielski": "ang",
+    "jezyk angielski": "ang",
     "angielski": "ang",
     "ang": "ang",
     "gb": "ang",
+    "język niemiecki": "niem",
+    "jezyk niemiecki": "niem",
     "niemiecki": "niem",
     "niem": "niem",
     "de": "niem",
+    "język hiszpański": "hiszp",
+    "jezyk hiszpanski": "hiszp",
     "hiszpański": "hiszp",
     "hiszpanski": "hiszp",
     "hisz": "hiszp",
     "hiszp": "hiszp",
     "es": "hiszp",
+    "język francuski": "franc",
+    "jezyk francuski": "franc",
     "francuski": "franc",
     "franc": "franc",
     "fr": "franc",
     "fra": "franc",
+    "język rosyjski": "ros",
+    "jezyk rosyjski": "ros",
     "rosyjski": "ros",
     "ros": "ros",
     "ru": "ros",
+    "język włoski": "wlos",
+    "jezyk wloski": "wlos",
     "włoski": "wlos",
     "wloski": "wlos",
     "wlo": "wlos",
     "wł": "wlos",
     "wl": "wlos",
     "it": "wlos",
+    "język łaciński": "lac",
+    "jezyk lacinski": "lac",
+    "łaciński": "lac",
+    "lacinski": "lac",
     "łacina": "lac",
     "lacina": "lac",
     "lac": "lac",
+    "język portugalski": "port",
+    "jezyk portugalski": "port",
+    "portugalski": "port",
+    "port": "port",
+    "por": "port",
+}
+
+LANGUAGE_DISPLAY_BY_TOKEN = {
+    "ang": "angielski",
+    "niem": "niemiecki",
+    "hiszp": "hiszpański",
+    "franc": "francuski",
+    "ros": "rosyjski",
+    "wlos": "włoski",
+    "lac": "łacina",
+    "port": "portugalski",
+}
+LANGUAGE_TOKEN_BY_DISPLAY = {
+    display: token for token, display in LANGUAGE_DISPLAY_BY_TOKEN.items()
 }
 
 CLASS_TYPE_ALIASES = {
@@ -302,6 +336,208 @@ def token_set_from_text(value: Any, aliases: dict[str, str]) -> tuple[str, ...]:
     return tuple(sorted(set(tokens)))
 
 
+def unique_preserving_order(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def language_level_from_text(value: Any) -> str:
+    raw = safe_text(value).lower()
+    normalized = ascii_key(raw)
+    if "poziom dwujezyczny" in normalized or "dwujezyczny" in normalized or "*d" in raw:
+        return "dwujęzyczny"
+    if "kontynuacja" in normalized or "(k)" in raw:
+        return "kontynuacja"
+    if "od podstaw" in normalized or "(p)" in raw:
+        return "od podstaw"
+    return "bez oznaczenia"
+
+
+def normalize_language_name(value: Any) -> str:
+    tokens = token_set_from_text(value, LANGUAGE_MATCH_ALIASES)
+    if not tokens:
+        return ""
+    return LANGUAGE_DISPLAY_BY_TOKEN.get(tokens[0], "")
+
+
+def split_language_options(value: Any) -> list[str]:
+    text = safe_text(value)
+    if not text:
+        return []
+    return [part.strip() for part in re.split(r"\s*[,;]\s*", text) if part.strip()]
+
+
+def parse_language_option(value: Any) -> tuple[str, str] | None:
+    language = normalize_language_name(value)
+    if not language:
+        return None
+    return language, language_level_from_text(value)
+
+
+def dedupe_language_options(
+    options: list[tuple[str, str]],
+) -> tuple[tuple[str, str], ...]:
+    seen = set()
+    result = []
+    for language, level in options:
+        key = (language, level)
+        if language and key not in seen:
+            seen.add(key)
+            result.append(key)
+    return tuple(result)
+
+
+def parse_language_option_list(value: Any) -> tuple[tuple[str, str], ...]:
+    options = []
+    for part in split_language_options(value):
+        parsed = parse_language_option(part)
+        if parsed:
+            options.append(parsed)
+    return dedupe_language_options(options)
+
+
+def parse_legacy_language_slots(
+    value: Any,
+) -> tuple[
+    tuple[tuple[str, str], ...],
+    tuple[tuple[str, str], ...],
+    tuple[tuple[str, str], ...],
+]:
+    text = safe_text(value)
+    if not text:
+        empty: tuple[tuple[str, str], ...] = tuple()
+        return empty, empty, empty
+
+    first_text = ""
+    second_text = ""
+    first_label = r"(?:1|pierwszy)"
+    second_label = r"(?:2|drugi)"
+    third_label = r"(?:3|trzeci)"
+    first_match = re.search(
+        rf"(?:^|\b){first_label}\s*:\s*(.*?)(?=\b{second_label}\s*:|$)",
+        text,
+        re.I,
+    )
+    second_match = re.search(
+        rf"(?:^|\b){second_label}\s*:\s*(.*?)(?=\b{third_label}\s*:|$)",
+        text,
+        re.I,
+    )
+    if first_match:
+        first_text = first_match.group(1)
+    if second_match:
+        second_text = second_match.group(1)
+
+    first = parse_language_option_list(first_text)
+    second = parse_language_option_list(second_text)
+    if not first and not second:
+        all_options = parse_language_option_list(text)
+    else:
+        all_options = dedupe_language_options([*first, *second])
+    return first, second, all_options
+
+
+def parse_class_name_language_slots(
+    value: Any,
+) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    empty: tuple[tuple[str, str], ...] = tuple()
+    text = safe_text(value)
+    if "(" not in text:
+        return empty, empty
+    parts = [
+        part.strip() for part in re.split(r"\s+-\s+", text, maxsplit=2) if part.strip()
+    ]
+    profile_part = parts[-1] if parts else text
+    if "(" not in profile_part:
+        return empty, empty
+    lang_part = profile_part[profile_part.find("(") + 1 :].strip()
+    while lang_part.endswith(")") and lang_part.count(")") > lang_part.count("("):
+        lang_part = lang_part[:-1].strip()
+    segments = [
+        part.strip() for part in re.split(r"\s*-\s*", lang_part) if part.strip()
+    ]
+    parsed_segments: list[tuple[str, str]] = []
+    for segment in segments:
+        parsed = parse_language_option(segment)
+        if parsed:
+            parsed_segments.append(parsed)
+    first = tuple(parsed_segments[:1])
+    second = tuple(parsed_segments[1:])
+    return first, second
+
+
+def language_options_for_row(row: pd.Series) -> dict[str, tuple[tuple[str, str], ...]]:
+    """Zwraca języki klasy jako sloty first/second/all z parami (język, poziom).
+
+    Parser korzysta z pól `PierwszyJezykObcy`, `DrugiJezykObcy`, `JezykiObce`,
+    `JezykiObceIkonyOpis` i `OddzialNazwa`. Kolejność wyboru dla pierwszego i
+    drugiego slotu to: jawne kolumny pierwszego/drugiego języka, legacy sloty
+    z `JezykiObce`, a potem języki odczytane z nazwy oddziału. Dla pierwszego
+    slotu dodatkowym fallbackiem są ikony z poziomem dwujęzycznym.
+
+    Klucz `all` jest deduplikowaną unią `first`, `second`, opcji ikon,
+    opcji legacy i opcji z nazwy oddziału. Deduplikacja zachowuje pierwszą
+    napotkaną kolejność, więc wcześniejsze źródła mają pierwszeństwo.
+    """
+    first = list(parse_language_option_list(row.get("PierwszyJezykObcy")))
+    second = list(parse_language_option_list(row.get("DrugiJezykObcy")))
+    legacy_first, legacy_second, legacy_all = parse_legacy_language_slots(
+        row.get("JezykiObce")
+    )
+    name_first, name_second = parse_class_name_language_slots(row.get("OddzialNazwa"))
+    icon_options = list(parse_language_option_list(row.get("JezykiObceIkonyOpis")))
+
+    if not first:
+        first.extend(legacy_first or name_first)
+    if not second:
+        second.extend(legacy_second or name_second)
+    if not first:
+        first.extend(option for option in icon_options if option[1] == "dwujęzyczny")
+
+    all_options = dedupe_language_options(
+        [*first, *second, *icon_options, *legacy_all, *name_first, *name_second]
+    )
+    return {
+        "first": dedupe_language_options(first),
+        "second": dedupe_language_options(second),
+        "all": all_options,
+    }
+
+
+def language_display_values(options: tuple[tuple[str, str], ...], item: str) -> str:
+    index = 0 if item == "language" else 1
+    values = unique_preserving_order([option[index] for option in options])
+    return "; ".join(values)
+
+
+def language_pair_values(options: tuple[tuple[str, str], ...]) -> str:
+    return "; ".join(
+        f"{language}|{level}"
+        for language, level in dedupe_language_options(list(options))
+    )
+
+
+def normalized_language_columns(row: pd.Series) -> dict[str, str]:
+    """Mapuje sloty językowe klasy na kolumny języków, poziomów i opcji."""
+    options = language_options_for_row(row)
+    return {
+        "JezykiPierwszeNorm": language_display_values(options["first"], "language"),
+        "JezykiDrugieNorm": language_display_values(options["second"], "language"),
+        "JezykiWszystkieNorm": language_display_values(options["all"], "language"),
+        "JezykiPierwszePoziomy": language_display_values(options["first"], "level"),
+        "JezykiDrugiePoziomy": language_display_values(options["second"], "level"),
+        "JezykiWszystkiePoziomy": language_display_values(options["all"], "level"),
+        "JezykiPierwszeOpcje": language_pair_values(options["first"]),
+        "JezykiDrugieOpcje": language_pair_values(options["second"]),
+        "JezykiWszystkieOpcje": language_pair_values(options["all"]),
+    }
+
+
 def class_profile_text_from_name(value: Any) -> str:
     """Wyciąga część profilu z nazwy oddziału, bez typu i języków w nawiasie."""
     text = safe_text(value)
@@ -330,17 +566,16 @@ def class_subject_tokens(row: pd.Series) -> tuple[str, ...]:
 
 
 def class_language_tokens(row: pd.Series) -> tuple[str, ...]:
-    text = " ".join(
-        safe_text(row.get(col))
-        for col in [
-            "JezykiObce",
-            "PierwszyJezykObcy",
-            "DrugiJezykObcy",
-            "JezykiObceIkonyOpis",
-            "OddzialNazwa",
-        ]
+    options = language_options_for_row(row)
+    return tuple(
+        sorted(
+            {
+                LANGUAGE_TOKEN_BY_DISPLAY[language]
+                for language, _level in options["all"]
+                if language in LANGUAGE_TOKEN_BY_DISPLAY
+            }
+        )
     )
-    return token_set_from_text(text, LANGUAGE_MATCH_ALIASES)
 
 
 def class_type_token(name: Any, explicit_type: Any = None) -> str:
@@ -1044,6 +1279,11 @@ def add_common_class_columns(df_classes: pd.DataFrame) -> pd.DataFrame:
         df_classes["TypOddzialu"] = existing_class_type.combine_first(parsed_class_type)
     else:
         df_classes["TypOddzialu"] = parsed_class_type
+    language_columns = df_classes.apply(
+        normalized_language_columns, axis=1, result_type="expand"
+    )
+    for column in language_columns.columns:
+        df_classes[column] = language_columns[column].fillna("")
     if "JezykiObce" in df_classes.columns:
         df_classes["JezykiObce"] = (
             df_classes["JezykiObce"]
@@ -1714,6 +1954,15 @@ def build_class_details(
         "DrugiJezykObcy",
         "JezykiObce",
         "JezykiObceIkonyOpis",
+        "JezykiPierwszeNorm",
+        "JezykiDrugieNorm",
+        "JezykiWszystkieNorm",
+        "JezykiPierwszePoziomy",
+        "JezykiDrugiePoziomy",
+        "JezykiWszystkiePoziomy",
+        "JezykiPierwszeOpcje",
+        "JezykiDrugieOpcje",
+        "JezykiWszystkieOpcje",
         "PrzedmiotyRozszerzone",
         "Zawod",
         "DyscyplinaSportowa",
@@ -2010,140 +2259,9 @@ def build_pzo_year(
         "classes": df_classes,
         "thresholds": df_thresholds,
         "ranking": df_ranking,
-        "plan": pd.DataFrame(),
         "school_details": school_details,
         "class_details": class_details,
         "threshold_matches": threshold_matches,
-    }
-
-
-def build_plan_year(
-    year_cfg: dict[str, Any], cfg: dict[str, Any], location_cache: pd.DataFrame
-) -> dict[str, pd.DataFrame]:
-    plan_path = ensure_source_file(year_cfg["offer"])
-    df_plan = load_plan_naboru(
-        plan_path, year=year_cfg["year"], school_year=year_cfg.get("school_year")
-    )
-    df_thresholds = load_thresholds(year_cfg)
-    df_ranking = load_ranking(year_cfg)
-
-    df_plan["SzkolaIdentyfikator"] = df_plan["NazwaSzkoly"].apply(normalize_name)
-    df_plan["source_school_id"] = (
-        "plan:"
-        + str(year_cfg["year"])
-        + ":"
-        + df_plan["SzkolaIdentyfikator"].astype(str)
-    )
-    df_plan["AdresSzkoly"] = df_plan["Ulica"].fillna("").astype(str) + ", Warszawa"
-
-    minmax = school_threshold_summary(df_thresholds)
-    historical_thresholds = historical_school_thresholds(df_thresholds)
-
-    df_classes = df_plan.copy()
-    detail = df_classes["ZawodLubJezyk"].fillna("").astype(str).str.strip()
-    df_classes["OddzialNazwa"] = (
-        "plan "
-        + df_classes["TypOddzialu"].astype(str)
-        + detail.map(lambda value: f" - {value}" if value else "")
-    )
-    df_classes = _append_duplicate_suffix(df_classes)
-    df_classes["IdSzkoly"] = pd.NA
-    df_classes["PrzedmiotyRozszerzone"] = ""
-    df_classes["JezykiObce"] = df_classes["ZawodLubJezyk"].fillna("")
-    df_classes["LiczbaMiejsc"] = df_classes["LiczbaMiejscPlan"]
-    df_classes["UrlGrupy"] = pd.NA
-    df_classes["Prog_min_klasa"] = pd.NA
-    df_classes = df_classes.merge(minmax, how="left", on="SzkolaIdentyfikator")
-    df_classes = df_classes.merge(
-        historical_thresholds, how="left", on="SzkolaIdentyfikator"
-    )
-    df_classes = df_classes.merge(
-        df_ranking[["SzkolaIdentyfikator", "RankingPoz", "RankingPozTekst"]],
-        how="left",
-        on="SzkolaIdentyfikator",
-    )
-    df_classes = add_common_class_columns(df_classes)
-
-    agg = {
-        "source_school_id": "first",
-        "NazwaSzkoly": "first",
-        "AdresSzkoly": "first",
-        "TypSzkoly": "first",
-        "Dzielnica": "first",
-        "LiczbaOddzialowPlan": "sum",
-        "LiczbaMiejscPlan": "sum",
-    }
-    df_schools = df_plan.groupby("SzkolaIdentyfikator", as_index=False).agg(agg)
-    df_schools = df_schools.merge(
-        df_ranking[["SzkolaIdentyfikator", "RankingPoz", "RankingPozTekst"]],
-        how="left",
-        on="SzkolaIdentyfikator",
-    )
-    df_schools = df_schools.merge(minmax, how="left", on="SzkolaIdentyfikator")
-    df_schools = df_schools.merge(
-        historical_thresholds, how="left", on="SzkolaIdentyfikator"
-    )
-
-    if not location_cache.empty:
-        cache_cols = [
-            col
-            for col in [
-                "SzkolaIdentyfikator",
-                "AdresSzkoly",
-                "CzasDojazdu",
-                "SzkolaLat",
-                "SzkolaLon",
-                "url",
-            ]
-            if col in location_cache.columns
-        ]
-        df_schools = df_schools.merge(
-            location_cache[cache_cols].drop_duplicates("SzkolaIdentyfikator"),
-            how="left",
-            on="SzkolaIdentyfikator",
-            suffixes=("", "_cache"),
-        )
-        if "AdresSzkoly_cache" in df_schools.columns:
-            df_schools["AdresSzkoly"] = df_schools["AdresSzkoly_cache"].combine_first(
-                df_schools["AdresSzkoly"]
-            )
-            df_schools.drop(columns=["AdresSzkoly_cache"], inplace=True)
-
-    for col in ["CzasDojazdu", "SzkolaLat", "SzkolaLon"]:
-        if col not in df_schools.columns:
-            df_schools[col] = None
-    if "url" not in df_schools.columns:
-        df_schools["url"] = "https://rekrutacje-warszawa.pzo.edu.pl"
-    else:
-        df_schools["url"] = df_schools["url"].fillna(
-            "https://rekrutacje-warszawa.pzo.edu.pl"
-        )
-
-    df_classes = df_classes.merge(
-        df_schools[
-            [
-                "SzkolaIdentyfikator",
-                "CzasDojazdu",
-                "SzkolaLat",
-                "SzkolaLon",
-                "url",
-            ]
-        ],
-        how="left",
-        on="SzkolaIdentyfikator",
-        suffixes=("", "_szkola"),
-    )
-
-    threshold_info = threshold_meta(year_cfg)
-    for df in [df_schools, df_classes, df_thresholds, df_ranking, df_plan]:
-        add_year_metadata(df, year_cfg, threshold_info)
-
-    return {
-        "schools": df_schools,
-        "classes": df_classes,
-        "thresholds": df_thresholds,
-        "ranking": df_ranking,
-        "plan": df_plan,
     }
 
 
@@ -2155,8 +2273,6 @@ def process_year(
         return build_vulcan_year(year_cfg, cfg, location_cache)
     if offer_type == "pzo_omikron":
         return build_pzo_year(year_cfg, cfg, location_cache)
-    if offer_type == "plan_naboru":
-        return build_plan_year(year_cfg, cfg, location_cache)
     raise ValueError(f"Nieznany typ oferty: {offer_type}")
 
 
@@ -2267,7 +2383,6 @@ def export_app_workbook(
         "classes": concat("classes"),
         "rankings": concat("ranking"),
         "thresholds": concat("thresholds"),
-        "plan_naboru": concat("plan"),
         "school_details": concat("school_details"),
         "class_details": concat("class_details"),
         "threshold_matches": concat("threshold_matches"),
